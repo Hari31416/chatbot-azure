@@ -1,7 +1,7 @@
 param location string
 param environmentName string
 param resourceToken string
-param containerImageTag string = 'latest'
+param containerImage string = 'mcr.microsoft.com/azuredocs/aci-helloworld:latest'
 param logAnalyticsWorkspaceCustomerId string
 @secure()
 param logAnalyticsWorkspaceSharedKey string
@@ -68,7 +68,7 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
       containers: [
         {
           name: 'fastapi-backend'
-          image: '${containerRegistry.properties.loginServer}/chatbot-backend:${containerImageTag}'
+          image: containerImage
           resources: {
             cpu: json('0.5')
             memory: '1.0Gi'

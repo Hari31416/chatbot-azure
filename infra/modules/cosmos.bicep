@@ -1,8 +1,8 @@
 param location string
-param environmentName string
+param resourceToken string
 
-resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2023-11-15' = {
-  name: 'cosmos-chatbot-${environmentName}'
+resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2024-05-15' = {
+  name: 'cosmos-chatbot-${resourceToken}'
   location: location
   kind: 'GlobalDocumentDB'
   properties: {
@@ -16,7 +16,7 @@ resource cosmosAccount 'Microsoft.DocumentDB/databaseAccounts@2023-11-15' = {
   }
 }
 
-resource database 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases@2023-11-15' = {
+resource database 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases@2024-05-15' = {
   parent: cosmosAccount
   name: 'chatbot'
   properties: {
@@ -24,7 +24,7 @@ resource database 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases@2023-11-15
   }
 }
 
-resource conversationsContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2023-11-15' = {
+resource conversationsContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2024-05-15' = {
   parent: database
   name: 'conversations'
   properties: {
@@ -42,7 +42,7 @@ resource conversationsContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDataba
   }
 }
 
-resource vectorsContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2023-11-15' = {
+resource vectorsContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2024-05-15' = {
   parent: database
   name: 'vectors'
   properties: {
@@ -78,3 +78,4 @@ resource vectorsContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/co
 output cosmosAccountName string = cosmosAccount.name
 output cosmosEndpoint string = cosmosAccount.properties.documentEndpoint
 output cosmosDatabaseName string = database.name
+

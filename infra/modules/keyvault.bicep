@@ -1,10 +1,11 @@
 param location string
 param environmentName string
+param resourceToken string
 param containerAppPrincipalId string = ''
 param functionAppPrincipalId string = ''
 
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
-  name: 'kv-chatbot-${environmentName}'
+  name: 'kv-chatbot-${resourceToken}'
   location: location
   tags: { 'azd-env-name': environmentName }
   properties: {

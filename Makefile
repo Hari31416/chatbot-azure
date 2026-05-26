@@ -1,8 +1,14 @@
 AZURE_ENV_NAME ?= dev
-AZURE_LOCATION ?= eastus
+AZURE_LOCATION ?= centralindia
 
 export AZURE_ENV_NAME
 export AZURE_LOCATION
+
+# Load environment variables from .env if it exists
+ifneq ("$(wildcard .env)","")
+  include .env
+  export
+endif
 
 .PHONY: deploy-infra deploy-backend deploy-frontend deploy-all
 
@@ -23,3 +29,7 @@ deploy-frontend:
 
 deploy-all: deploy-infra deploy-backend deploy-frontend
 	@echo "🎉 Full Azure stack deployment complete!"
+
+show-outputs:
+	@./get-outputs.sh
+

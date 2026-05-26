@@ -9,7 +9,7 @@ param location string
 @description('Unique resource token for naming')
 var resourceToken = toLower(uniqueString(subscription().id, environmentName, location))
 
-var keyVaultName = 'kv-chatbot-${environmentName}'
+var keyVaultName = 'kv-chatbot-${resourceToken}'
 
 // ──────────────────────────────────────────────
 // Resource Group
@@ -56,7 +56,7 @@ module cosmos './modules/cosmos.bicep' = {
   scope: rg
   params: {
     location: location
-    environmentName: environmentName
+    resourceToken: resourceToken
   }
 }
 
@@ -115,6 +115,7 @@ module keyvault './modules/keyvault.bicep' = {
   params: {
     location: location
     environmentName: environmentName
+    resourceToken: resourceToken
     functionAppPrincipalId: functions.outputs.functionAppPrincipalId
     containerAppPrincipalId: containerApps.outputs.containerAppPrincipalId
   }
