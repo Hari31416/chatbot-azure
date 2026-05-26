@@ -15,6 +15,8 @@ param docIntelKey string = ''
 param litellmApiKey string = ''
 @secure()
 param litellmVisionApiKey string = ''
+@secure()
+param clerkSecretKey string = ''
 
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   name: 'kv-chatbot-${resourceToken}'
@@ -102,6 +104,14 @@ resource litellmVisionApiKeySecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01
   name: 'litellm-vision-api-key'
   properties: {
     value: litellmVisionApiKey
+  }
+}
+
+resource clerkSecretKeySecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (clerkSecretKey != '') {
+  parent: keyVault
+  name: 'clerk-secret-key'
+  properties: {
+    value: clerkSecretKey
   }
 }
 

@@ -286,7 +286,7 @@ def test_function_app_success() -> None:
     msg = FakeQueueMessage()
     
     with patch("app.dependencies.get_repository", return_value=mock_repo), \
-         patch("app.dependencies.get_storage", return_value=mock_storage), \
+         patch("app.dependencies.get_staging_storage", return_value=mock_storage), \
          patch("app.dependencies.get_rag_service", return_value=mock_rag):
          
          from function_app import process_ingestion
@@ -337,7 +337,7 @@ def test_function_app_failure_updates_status() -> None:
     msg = FakeQueueMessage()
     
     with patch("app.dependencies.get_repository", return_value=mock_repo), \
-         patch("app.dependencies.get_storage", return_value=mock_storage), \
+         patch("app.dependencies.get_staging_storage", return_value=mock_storage), \
          patch("app.dependencies.get_rag_service", return_value=mock_rag):
          
          from function_app import process_ingestion

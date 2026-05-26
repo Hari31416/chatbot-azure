@@ -10,6 +10,10 @@ param location string
 param liteLlmApiKey string = ''
 @secure()
 param liteLlmVisionApiKey string = ''
+@secure()
+param clerkSecretKey string = ''
+param clerkIssuer string = ''
+param clerkAuthorizedParties string = ''
 
 @description('Unique resource token for naming')
 var resourceToken = toLower(uniqueString(subscription().id, environmentName, location))
@@ -112,6 +116,8 @@ module containerApps './modules/container-apps.bicep' = {
     keyVaultName: keyVaultName
     cosmosEndpoint: cosmos.outputs.cosmosEndpoint
     storageAccountName: storage.outputs.storageAccountName
+    clerkIssuer: clerkIssuer
+    clerkAuthorizedParties: clerkAuthorizedParties
   }
 }
 
@@ -145,6 +151,7 @@ module keyvault './modules/keyvault.bicep' = {
     docIntelKey: docIntelligence.outputs.key
     litellmApiKey: liteLlmApiKey
     litellmVisionApiKey: liteLlmVisionApiKey
+    clerkSecretKey: clerkSecretKey
   }
 }
 

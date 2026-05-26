@@ -63,16 +63,31 @@ class Settings(BaseSettings):
 
 
 
-    # ── Entra Auth (Phase 4) ──
-    azure_tenant_id: str | None = Field(
-        default=None, validation_alias="AZURE_TENANT_ID"
+    # ── Clerk Auth ──
+    clerk_issuer: str | None = Field(default=None, validation_alias="CLERK_ISSUER")
+    clerk_jwks_url: str | None = Field(
+        default=None, validation_alias="CLERK_JWKS_URL"
     )
-    azure_client_id: str | None = Field(
-        default=None, validation_alias="AZURE_CLIENT_ID"
+    clerk_authorized_parties: list[str] | str = Field(
+        default_factory=list,
+        validation_alias="CLERK_AUTHORIZED_PARTIES",
     )
-    entra_authority: str | None = Field(
-        default=None, validation_alias="ENTRA_AUTHORITY"
+    # Prefer Key Vault secret `clerk-secret-key`; env var is local bootstrap only
+    clerk_secret_key: str | None = Field(
+        default=None, validation_alias="CLERK_SECRET_KEY"
     )
+
+    @property
+    def auth_enabled(self) -> bool:
+        return bool(self.clerk_issuer)
+
+    @property
+    def clerk_jwks_uri(self) -> str | None:
+        if self.clerk_jwks_url:
+            return self.clerk_jwks_url
+        if self.clerk_issuer:
+            return f"{self.clerk_issuer.rstrip('/')}/.well-known/jwks.json"
+        return None
 
     # ── Storage Queue & Document Intelligence (Phase 5) ──
     azure_ingestion_queue_name: str = Field(
@@ -126,6 +141,13 @@ class Settings(BaseSettings):
     @field_validator("allowed_image_mime_types", mode="before")
     @classmethod
     def _parse_mime_types(cls, value: object) -> list[str] | object:
+        if isinstance(value, str):
+            return [item.strip() for item in value.split(",") if item.strip()]
+        return value
+
+    @field_validator("clerk_authorized_parties", mode="before")
+    @classmethod
+    def _parse_authorized_parties(cls, value: object) -> list[str] | object:
         if isinstance(value, str):
             return [item.strip() for item in value.split(",") if item.strip()]
         return value

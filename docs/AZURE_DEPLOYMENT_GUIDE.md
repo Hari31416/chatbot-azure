@@ -95,9 +95,25 @@ az deployment sub show \
 
 ---
 
-## 🔐 Step 3: Configure Microsoft Entra ID Authentication
+## 🔐 Step 3: Configure Clerk Authentication
 
-Microsoft Entra ID (formerly Azure Active Directory) serves as the secure Identity Provider for this chatbot platform.
+User sign-in is handled by [Clerk](https://clerk.com), not Microsoft Entra ID. See **[CLERK_AUTH_SETUP.md](./CLERK_AUTH_SETUP.md)** for the full key checklist and dashboard steps.
+
+**Quick summary — keys you need:**
+
+| Key | Where to set |
+|-----|----------------|
+| `VITE_CLERK_PUBLISHABLE_KEY` | `frontend/.env` (build-time) |
+| `CLERK_ISSUER` | Root `.env` + Container App |
+| `CLERK_AUTHORIZED_PARTIES` | Root `.env` + Container App |
+
+---
+
+### (Legacy) Microsoft Entra ID — replaced by Clerk
+
+The steps below are **deprecated** and kept for reference only. Use Clerk instead.
+
+Microsoft Entra ID (formerly Azure Active Directory) previously served as the Identity Provider for this chatbot platform.
 
 ### A. Create an App Registration
 1. Sign in to the [Azure Portal](https://portal.azure.com/).

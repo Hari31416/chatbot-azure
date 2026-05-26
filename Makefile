@@ -18,7 +18,10 @@ deploy-infra:
 	  --location $(AZURE_LOCATION) \
 	  --template-file infra/main.bicep \
 	  --parameters environmentName=$(AZURE_ENV_NAME) location=$(AZURE_LOCATION) \
-	               liteLlmApiKey="$(LITELLM_API_KEY)" liteLlmVisionApiKey="$(LITELLM_VISION_API_KEY)"
+	               liteLlmApiKey="$(LITELLM_API_KEY)" liteLlmVisionApiKey="$(LITELLM_VISION_API_KEY)" \
+	               clerkSecretKey="$(CLERK_SECRET_KEY)" \
+	               clerkIssuer="$(CLERK_ISSUER)" \
+	               clerkAuthorizedParties="$(CLERK_AUTHORIZED_PARTIES)"
 
 deploy-backend:
 	@echo "🚀 Building backend container and deploying to Azure Container Apps..."

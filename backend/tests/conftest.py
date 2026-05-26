@@ -10,6 +10,7 @@ from app.dependencies import (
     get_rag_service,
     get_repository,
     get_settings,
+    get_staging_storage,
     get_storage,
     get_vector_store,
     get_vision_llm_client,
@@ -266,8 +267,12 @@ class FakeRagService:
 
 
 @pytest.fixture()
-def test_client() -> Iterator[TestClient]:
+def test_client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     from app.main import app
+
+    monkeypatch.delenv("CLERK_ISSUER", raising=False)
+    monkeypatch.delenv("CLERK_AUTHORIZED_PARTIES", raising=False)
+    get_settings.cache_clear()
 
     repo = InMemoryConversationRepository()
     storage = InMemoryStorageService()
@@ -275,14 +280,16 @@ def test_client() -> Iterator[TestClient]:
     vector_store = FakeVectorStore()
     rag_service = FakeRagService()
     settings = Settings(
-        dynamodb_table_name="test",
-        s3_bucket_name="test-bucket",
+        cosmos_endpoint="https://localhost:8081",
+        clerk_issuer=None,
+        clerk_authorized_parties=[],
         max_image_bytes=5 * 1024 * 1024,
         allowed_image_mime_types=["image/png", "image/jpeg", "image/webp"],
     )
 
     app.dependency_overrides[get_repository] = lambda: repo
     app.dependency_overrides[get_storage] = lambda: storage
+    app.dependency_overrides[get_staging_storage] = lambda: storage
     app.dependency_overrides[get_llm_client] = lambda: llm
     app.dependency_overrides[get_vision_llm_client] = lambda: llm
     app.dependency_overrides[get_vector_store] = lambda: vector_store
