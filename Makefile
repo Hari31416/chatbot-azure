@@ -10,7 +10,7 @@ ifneq ("$(wildcard .env)","")
   export
 endif
 
-.PHONY: deploy-infra deploy-backend deploy-frontend deploy-all
+.PHONY: deploy-infra deploy-backend deploy-functions deploy-frontend deploy-all
 
 deploy-infra:
 	@echo "🚀 Provisioning Azure Infrastructure via Bicep..."
@@ -24,11 +24,15 @@ deploy-backend:
 	@echo "🚀 Building backend container and deploying to Azure Container Apps..."
 	./deploy-backend.sh
 
+deploy-functions:
+	@echo "🚀 Deploying background queue worker to Azure Functions..."
+	./deploy-functions.sh
+
 deploy-frontend:
 	@echo "🚀 Compiling React frontend and deploying to Azure Static Web Apps..."
 	./deploy-frontend.sh
 
-deploy-all: deploy-infra deploy-backend deploy-frontend
+deploy-all: deploy-infra deploy-backend deploy-functions deploy-frontend
 	@echo "🎉 Full Azure stack deployment complete!"
 
 show-outputs:

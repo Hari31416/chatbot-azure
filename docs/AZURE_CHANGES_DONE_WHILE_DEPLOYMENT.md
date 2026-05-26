@@ -173,4 +173,15 @@ This document records the exact changes and adjustments made to the Azure Bicep 
   - **SSM-Style Secrets Automation**: Integrated local `.env` LiteLLM keys (`LITELLM_API_KEY` and `LITELLM_VISION_API_KEY`) into the `Makefile` parameters target. During provisioning, Bicep securely passes and registers these credentials as `litellm-api-key` and `litellm-vision-api-key` in Key Vault.
   - **Dynamic Runtime Resolution**: Updated `dependencies.py` to retrieve `azure-document-intelligence-endpoint` and `azure-document-intelligence-key` securely from Key Vault at runtime via system Managed Identities.
 
+---
 
+## 13. Function App Globally Unique DNS Naming & Deploy Tooling
+
+- **Issue**: The Function App failed to provision with a `Conflict` error: `Website with given name func-chatbot-worker-dev already exists`. Since Azure Function Apps are part of a global DNS namespace (`<name>.azurewebsites.net`), naming them with a static name like `func-chatbot-worker-dev` risks name collision with other users.
+- **Resolution**:
+  - **Unique DNS Naming**: Parameterized `functions.bicep` with the Subscription/Location-unique `resourceToken` variable, renaming the app resource to `func-chatbot-worker-${resourceToken}` and its Azure Files share setting to `func-chatbot-worker-${resourceToken}-share`.
+  - **Dynamic CLI Outputs**: Exposed the dynamically generated app name in `main.bicep` as `output AZURE_FUNCTION_APP_NAME string`.
+  - **Automated Sync & Script Integration**:
+    - Updated `update-env.py` and `get-outputs.sh` to extract the `AZURE_FUNCTION_APP_NAME` dynamically using case-insensitive key parsing and write it to `.env`.
+    - Created `deploy-functions.sh` to retrieve this unique app name from `.env` or outputs and deploy the Python serverless codebase via Azure Functions Core Tools (`func azure functionapp publish`).
+    - Added the `deploy-functions` target to the `Makefile` and integrated it as part of `deploy-all`.

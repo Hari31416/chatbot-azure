@@ -16,12 +16,20 @@ def main():
         print(f"❌ Error fetching deployment outputs: {e}")
         return
 
+    def get_output_val(key):
+        key_lower = key.lower()
+        for k, v in outputs.items():
+            if k.lower() == key_lower:
+                return v.get("value")
+        return None
+
     env_updates = {
-        "AZURE_STORAGE_ACCOUNT_NAME": outputs.get("azurE_STORAGE_ACCOUNT_NAME", {}).get("value"),
-        "COSMOS_ENDPOINT": outputs.get("cosmoS_ENDPOINT", {}).get("value"),
-        "AZURE_KEYVAULT_NAME": outputs.get("azurE_KEYVAULT_NAME", {}).get("value"),
-        "AZURE_CONTAINER_REGISTRY": outputs.get("azurE_CONTAINER_REGISTRY", {}).get("value"),
-        "AZURE_SWA_DEPLOYMENT_TOKEN": outputs.get("azurE_SWA_DEPLOYMENT_TOKEN", {}).get("value")
+        "AZURE_STORAGE_ACCOUNT_NAME": get_output_val("AZURE_STORAGE_ACCOUNT_NAME"),
+        "COSMOS_ENDPOINT": get_output_val("COSMOS_ENDPOINT"),
+        "AZURE_KEYVAULT_NAME": get_output_val("AZURE_KEYVAULT_NAME"),
+        "AZURE_CONTAINER_REGISTRY": get_output_val("AZURE_CONTAINER_REGISTRY"),
+        "AZURE_SWA_DEPLOYMENT_TOKEN": get_output_val("AZURE_SWA_DEPLOYMENT_TOKEN"),
+        "AZURE_FUNCTION_APP_NAME": get_output_val("AZURE_FUNCTION_APP_NAME")
     }
 
     env_vars = {}

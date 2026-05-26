@@ -88,6 +88,7 @@ module functions './modules/functions.bicep' = {
   params: {
     location: location
     environmentName: environmentName
+    resourceToken: resourceToken
     storageAccountConnectionString: storageConnectionString
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
     cosmosEndpoint: cosmos.outputs.cosmosEndpoint
@@ -159,3 +160,4 @@ output AZURE_CONTAINER_REGISTRY_LOGIN_SERVER string = containerApps.outputs.cont
 output BACKEND_URL string = containerApps.outputs.containerAppFqdn
 output FRONTEND_URL string = staticWebApp.outputs.staticWebAppUrl
 output AZURE_SWA_DEPLOYMENT_TOKEN string = staticWebApp.outputs.deploymentToken
+output AZURE_FUNCTION_APP_NAME string = functions.outputs.functionAppName
