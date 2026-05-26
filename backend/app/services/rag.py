@@ -46,7 +46,7 @@ class RagService:
             return RagIngestResult(document_id=document_id, chunks_ingested=0)
 
         embeddings = await self.vector_store.get_embeddings(chunks)
-        keys = [f"{document_id}#chunk-{idx}" for idx in range(len(chunks))]
+        keys = [f"{document_id}-chunk-{idx}" for idx in range(len(chunks))]
         await self.vector_store.upsert_chunks(
             keys=keys,
             texts=chunks,
@@ -93,7 +93,7 @@ class RagService:
             poller = await to_thread.run_sync(
                 lambda: self.doc_intelligence_client.begin_analyze_document(
                     "prebuilt-layout",
-                    analyze_request=data,
+                    data,
                     content_type=mime_type,
                     output_content_format="markdown",
                 )
@@ -125,7 +125,7 @@ class RagService:
             return RagIngestResult(document_id=document_id, chunks_ingested=0)
 
         embeddings = await self.vector_store.get_embeddings(chunks)
-        keys = [f"{document_id}#chunk-{idx}" for idx in range(len(chunks))]
+        keys = [f"{document_id}-chunk-{idx}" for idx in range(len(chunks))]
         await self.vector_store.upsert_chunks(
             keys=keys,
             texts=chunks,

@@ -33,6 +33,7 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
       appSettings: [
         { name: 'AzureWebJobsStorage', value: storageAccountConnectionString }
         { name: 'FUNCTIONS_WORKER_RUNTIME', value: 'python' }
+        { name: 'FUNCTIONS_EXTENSION_VERSION', value: '~4' }
         { name: 'WEBSITE_CONTENTAZUREFILECONNECTIONSTRING', value: storageAccountConnectionString }
         { name: 'WEBSITE_CONTENTSHARE', value: 'func-chatbot-worker-${resourceToken}-share' }
         { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appInsightsConnectionString }

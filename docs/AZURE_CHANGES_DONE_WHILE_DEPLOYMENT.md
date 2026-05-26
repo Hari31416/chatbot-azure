@@ -185,3 +185,75 @@ This document records the exact changes and adjustments made to the Azure Bicep 
     - Updated `update-env.py` and `get-outputs.sh` to extract the `AZURE_FUNCTION_APP_NAME` dynamically using case-insensitive key parsing and write it to `.env`.
     - Created `deploy-functions.sh` to retrieve this unique app name from `.env` or outputs and deploy the Python serverless codebase via Azure Functions Core Tools (`func azure functionapp publish`).
     - Added the `deploy-functions` target to the `Makefile` and integrated it as part of `deploy-all`.
+
+---
+
+## 14. Missing `FUNCTIONS_EXTENSION_VERSION` Causing Persistent 503 (Site Unavailable)
+
+- **Issue**: After the Function App was provisioned via Bicep, both the main app endpoint (`func-chatbot-worker-*.azurewebsites.net`) and the SCM/Kudu deploy endpoint (`*.scm.azurewebsites.net`) returned `503 Site Unavailable`. This completely blocked all `func azure functionapp publish` deployments with the error:
+  > `Unable to connect to the Azure Function App... Response status code does not indicate success: 503 (Site Unavailable).`
+  All standard troubleshooting (restarts, network checks, storage validation) confirmed the app was running, public network access was enabled, and the Azure Files content share was intact — but the 503 persisted.
+- **Root Cause**: The `functions.bicep` module was missing the **`FUNCTIONS_EXTENSION_VERSION = ~4`** app setting. This setting tells the Azure Functions platform which version of the host runtime to load. Without it, the Linux Consumption plan cannot initialize the Functions v4 host, leaving the entire app (including its SCM site) in a permanently broken 503 state.
+- **Resolution**:
+  - **Live fix via CLI**: Applied the missing setting immediately to the running Function App and restarted it:
+    ```bash
+    az functionapp config appsettings set \
+      --name func-chatbot-worker-<token> \
+      --resource-group rg-chatbot-dev \
+      --settings FUNCTIONS_EXTENSION_VERSION="~4"
+    az functionapp restart --name func-chatbot-worker-<token> --resource-group rg-chatbot-dev
+    ```
+  - **Permanent fix in Bicep**: Added `FUNCTIONS_EXTENSION_VERSION` to the `appSettings` block in `infra/modules/functions.bicep` so all future `make deploy-infra` runs provision it correctly:
+    ```bicep
+    { name: 'FUNCTIONS_EXTENSION_VERSION', value: '~4' }
+    ```
+  - _Result_: Both the main app and the SCM endpoint returned healthy status codes, and `func azure functionapp publish` completed successfully.
+
+---
+
+## 15. Python Version Mismatch Warning & `deploy-functions.sh` Hardening
+
+- **Issue**: Running `make deploy-functions` printed a warning:
+  > `Local python version '3.14.x' is different from the version expected for your deployed Function App. This may result in 'ModuleNotFound' errors in Azure Functions. Please create a Python Function App for version 3.14 or change the virtual environment on your local machine to match 'Python|3.12'.`
+  The local `.venv` was created with Python 3.13 (the system default), while the Azure Function App is configured with `linuxFxVersion: Python|3.12`. This mismatch risks native C-extension `.so` files being built for the wrong ABI, causing `ModuleNotFoundError` at runtime on Azure.
+- **Resolution**: Hardened `deploy-functions.sh` with two additional safeguards:
+  1. **Python 3.12 venv enforcement**: The script now detects the Python version of the existing `.venv`. If it does not match `3.12`, it automatically deletes and recreates the venv using the `uv`-managed Python 3.12 interpreter and re-installs all dependencies from `requirements.txt`:
+     ```bash
+     PYTHON312=$(uv python find 3.12)
+     uv venv --python 3.12 .venv
+     uv pip install -r requirements.txt
+     ```
+  2. **SCM readiness retry loop**: Before invoking `func azure functionapp publish`, the script polls the SCM endpoint (up to 10 attempts, 15 s apart) and only proceeds once it returns a non-503 response. This guards against cold-start race conditions on the Consumption plan where the Kudu site can take time to spin up after a restart:
+     ```bash
+     for i in $(seq 1 $MAX_RETRIES); do
+       HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$SCM_URL")
+       [ "$HTTP_STATUS" != "503" ] && break
+       sleep "$RETRY_DELAY"
+     done
+     ```
+
+---
+
+## 16. Cosmos DB `ValueError: Id contains illegal chars` — DynamoDB `#` Key Convention in Chunk IDs
+
+- **Issue**: RAG document ingestion failed silently in the Azure Function. Application Insights logs showed:
+  ```
+  ValueError: Id contains illegal chars.
+  2026-05-26 16:39:28 - function_app - ERROR - Failed ingestion for document_id=0f8d1089-000e-4b85-ada1-f6e9e02bdeab
+  ```
+  Every uploaded document was processed by the queue trigger but crashed during the vector chunk upsert phase, leaving all documents permanently stuck in `"processing"` status in Cosmos DB.
+- **Root Cause**: In `backend/app/services/rag.py`, the Cosmos DB document IDs for each text chunk were generated as:
+  ```python
+  keys = [f"{document_id}#chunk-{idx}" for idx in range(len(chunks))]
+  ```
+  The `#` character was carried over from the original **AWS DynamoDB sort key convention** (where `PK#SK` composite keys are idiomatic). However, Azure Cosmos DB for NoSQL **explicitly forbids** `#`, `/`, `\`, and `?` in document `id` fields. The Python SDK raises a client-side `ValueError` before even making the HTTP request, crashing the entire ingestion pipeline.
+- **Resolution**: Replaced `#` with `-` in both `ingest_document` and `ingest_binary_document` key generation:
+  ```python
+  # Before (broken)
+  keys = [f"{document_id}#chunk-{idx}" for idx in range(len(chunks))]
+
+  # After (fixed)
+  keys = [f"{document_id}-chunk-{idx}" for idx in range(len(chunks))]
+  ```
+  Fixed in both code paths (text and binary document ingestion) in [rag.py](../backend/app/services/rag.py).
+

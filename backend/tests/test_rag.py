@@ -179,10 +179,10 @@ class MockDocumentIntelligenceClient:
         self.fail = fail
         self.analyze_calls = []
 
-    def begin_analyze_document(self, model_id, analyze_request, content_type, output_content_format):
+    def begin_analyze_document(self, model_id, body, content_type, output_content_format):
         self.analyze_calls.append({
             "model_id": model_id,
-            "data": analyze_request,
+            "data": body,
             "content_type": content_type,
             "output_content_format": output_content_format
         })
