@@ -257,3 +257,15 @@ This document records the exact changes and adjustments made to the Azure Bicep 
   ```
   Fixed in both code paths (text and binary document ingestion) in [rag.py](../backend/app/services/rag.py).
 
+---
+
+## 17. Migration to Clerk Authentication (Replacing Microsoft Entra ID)
+
+- **Issue**: Deploying and configuring Microsoft Entra ID (Active Directory) introduced significant setup complexity, including registering app clients in the Entra portal, configuring redirect URIs for multiple environments (localhost vs Static Web Apps), managing complex tenant policies, and handling token lifetimes.
+- **Resolution**:
+  - Migrated the application authentication layer entirely to **Clerk**.
+  - **Frontend Integration**: Updated the React SPA frontend to use the Clerk React SDK (`@clerk/clerk-react`) for secure user registration, sign-in, and account configuration.
+  - **Backend Validation**: Updated `backend/app/dependencies.py` to validate session JWTs dynamically against Clerk's JSON Web Key Set (JWKS) endpoint (`{CLERK_ISSUER}/.well-known/jwks.json`).
+  - **Environment Separation**: Configured the backend settings to filter authorized audience (`azp` claim) origins based on `CLERK_AUTHORIZED_PARTIES` configuration (e.g., localhost, SWA domain).
+  - **Security Best Practices**: Configured the Clerk Backend Secret Key (`clerk-secret-key`) as a secure secret inside Azure Key Vault.
+  - _Result_: Authentication setup is now modular, easier to deploy, and supports cleaner development flows both locally and in production.

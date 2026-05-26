@@ -1,8 +1,8 @@
 # Serverless Chatbot and RAG Platform on Azure
 
-A production-grade, secure, and fully serverless AI Chatbot and RAG (Retrieval-Augmented Generation) platform. The application is built using a decoupled Python FastAPI backend and a TypeScript React SPA frontend. Deployed natively on Azure, the platform achieves serverless real-time streaming, enterprise authentication, and robust asynchronous document ingestion.
+A production-grade, secure, and fully serverless AI Chatbot and RAG (Retrieval-Augmented Generation) platform. The application is built using a decoupled Python FastAPI backend and a TypeScript React SPA frontend. Deployed natively on Azure, the platform achieves serverless real-time streaming, modern user authentication, and robust asynchronous document ingestion.
 
-The architecture features Server-Sent Events (SSE) streaming through Azure Container Apps, Entra ID-based JWT authentication, private multimodal attachment storage in Azure Blob Storage, and a decoupled event-driven RAG ingestion pipeline using Azure Storage Queues, Azure AI Document Intelligence, and native Cosmos DB for conversation history and vector storage.
+The architecture features Server-Sent Events (SSE) streaming through Azure Container Apps, Clerk-based JWT authentication, private multimodal attachment storage in Azure Blob Storage, and a decoupled event-driven RAG ingestion pipeline using Azure Storage Queues, Azure AI Document Intelligence, and native Cosmos DB for conversation history and vector storage.
 
 ---
 
@@ -13,7 +13,7 @@ The entire platform is built with a serverless-first philosophy, ensuring high s
 - **Vite React SPA** is compiled into static assets and hosted seamlessly on **Azure Static Web Apps (SWA)**.
 - **FastAPI Backend Application** runs inside an auto-scaling **Azure Container App (ACA)**. Traffic is routed securely through a public ingress endpoint, supporting serverless real-time SSE streaming.
 - **System-Assigned Managed Identity** handles permissions automatically, allowing Azure Container Apps and Azure Functions to authenticate with Azure Key Vault, Azure Blob Storage, and Azure Cosmos DB without hardcoded connection secrets.
-- **Azure Entra ID (Active Directory)** provides secure enterprise registration, sign-in, and session management. API routes validate JWTs in the `Authorization` header.
+- **Clerk Authentication** provides user identity management, registration, sign-in, and session management on the frontend. The backend validates Clerk session JWTs dynamically against Clerk's JWKS endpoint.
 - **Azure Storage Queues Ingestion Queue** handles background document processing. When a document is uploaded, it lands in the staging area of an Azure Blob Storage container. This triggers a storage queue message, decoupling the ingestion workload from the API request lifecycle.
 - **Asynchronous Ingestion Worker** is an isolated **Azure Function App** triggered by the Ingestion Queue. It downloads files, processes multi-page binaries using **Azure AI Document Intelligence**, splits and chunks text, computes embeddings via LiteLLM, indexes them in a native **Cosmos DB** container, and updates the document status.
 
@@ -22,7 +22,7 @@ The entire platform is built with a serverless-first philosophy, ensuring high s
 ```mermaid
 graph TD
     Client["Client (Vite React SPA on Azure SWA)"]
-    Entra["Microsoft Entra ID (App Client ID)"]
+    Clerk["Clerk Auth Service"]
     ACA["Azure Container App (FastAPI Backend)"]
     Cosmos["Azure Cosmos DB NoSQL"]
     BlobStorage["Azure Blob Storage (Staging & Uploads)"]
@@ -32,7 +32,7 @@ graph TD
     Worker["Azure Function Ingestion Worker"]
     DocIntel["Azure AI Document Intelligence"]
 
-    Client -->|1. Authenticate & Obtain JWT| Entra
+    Client -->|1. Authenticate & Obtain JWT| Clerk
     Client -->|2. HTTP Request with Bearer Token| ACA
     Client -->|3. SSE Token Stream| ACA
     ACA -->|4. Store/Load History & Context Cache| Cosmos
@@ -61,7 +61,6 @@ graph TD
 | **Azure Storage Queues**               | Decoupled queue for queuing heavy document parsing and embedding tasks   | Pay-Per-Transactions               |
 | **Azure Blob Storage**                 | Secure storage for staging documents and presigned image attachments     | Pay-Per-Space + Requests           |
 | **Azure Cosmos DB**                    | Stores conversation history, metadata, and RAG vector embeddings         | Pay-Per-Request (Serverless)       |
-| **Microsoft Entra ID**                 | Authenticates users and issues JWT secure tokens                         | Standard Tier                      |
 | **Azure AI Document Intelligence**     | Extracts layouts and text lines from multi-page PDFs, TIFFs, and PNGs    | Pay-Per-Page (Free tier available) |
 | **Azure Key Vault**                    | Secure encrypted secret store of model API keys and gateway credentials  | Pay-Per-Transaction                |
 | **Azure Log Analytics & App Insights** | Centrally logs events, monitors server performance, and tracks API usage | Pay-Per-Ingestion (Azure Monitor)  |
@@ -71,7 +70,7 @@ graph TD
 ## Key Features
 
 - **Serverless response streaming (SSE)** — Real-time response token streaming using `astream` via Azure Container Apps built-in HTTP ingress stream support.
-- **Enterprise authentication (Entra ID)** — Comprehensive user registration, account confirmation, secure sign-in, and JWT verification across endpoints.
+- **Modern User Authentication (Clerk)** — Frontend sign-up, sign-in, and profile management backed by secure JWKS validation on FastAPI endpoints.
 - **Decoupled asynchronous RAG ingestion** — Multipart file uploads are immediately accepted with an HTTP `202` response. A background Azure Function worker handles layout parsing (via Document Intelligence), text splitting, embedding generation, and vector index updates.
 - **Fully native vector search** — Integrated directly into Azure Cosmos DB. Supports dense similarity searches scoped by `user_id` without external database servers.
 - **Multimodal chat** — Upload PNG, JPEG, and WebP images (≤ 5MB) during conversations. Images are stored privately in Blob Storage, and served using expiring SAS URLs (1-hour TTL).
@@ -94,7 +93,7 @@ graph TD
 | **Compute**             | Azure Container Apps, Azure Functions          | Serverless API runtime and serverless queue worker runtime            |
 | **Database**            | Azure Cosmos DB                                | Conversation history storage and context cache                        |
 | **Vector DB**           | Azure Cosmos DB Vectors                        | Integrated serverless vector store for RAG embeddings                 |
-| **Authentication**      | Microsoft Entra ID                             | Enterprise multi-tenant user login and JWT token validation           |
+| **Authentication**      | Clerk Auth                                     | Modern user sign-in/up and JWKS token verification                   |
 | **Document Processing** | Azure AI Document Intelligence, Storage Queues | Layout extraction, task queuing, and OCR                              |
 
 ---
@@ -108,6 +107,7 @@ chatbot-azure/
 │   ├── modules/                 # Modularized components
 │   │   ├── container-apps.bicep # Azure Container Apps + ACR environment
 │   │   ├── cosmos.bicep         # Cosmos DB Account, DB, and containers
+│   │   ├── document-intelligence.bicep # Azure AI Document Intelligence resource
 │   │   ├── functions.bicep      # Azure Function host and settings
 │   │   ├── keyvault.bicep       # Secrets storage and role assignments
 │   │   ├── monitoring.bicep     # Log Analytics + Application Insights
@@ -164,7 +164,7 @@ chatbot-azure/
         ├── types/           # TypeScript interfaces for API payloads and entities
         │
         └── services/
-            ├── auth.ts      # Entra ID integration wrapper for login, confirm, and signup
+            ├── auth.ts      # Clerk session token bridge for API requests
             └── api.ts       # HTTP client endpoints and real-time SSE stream reader
 ```
 
@@ -186,7 +186,7 @@ sequenceDiagram
     participant KeyVault as Azure Key Vault
 
     Client->>ACA: POST /chat/stream (Bearer JWT, ChatRequest)
-    Note over ACA: Authenticate User via JWT (Entra ID)
+    Note over ACA: Authenticate User via JWT (Clerk JWKS)
     ACA->>Cosmos: create_conversation & put_message (user)
 
     opt use_rag is True
@@ -214,29 +214,34 @@ sequenceDiagram
 
 ---
 
-## Installation & Setup
+## Local Development
+
+Follow these steps to run the application components in your local development environment.
 
 ### Prerequisites
 
-- **Python 3.12+** & **uv** package manager.
-- **Node.js 18+** & **pnpm** package manager.
-- **Azure CLI** (`az` configured with access to active subscription).
-- **Docker** (required locally for running and building container images).
+Ensure you have the following tools installed:
+- Python 3.12+ (managed with `uv`)
+- Node.js 18+ and `pnpm` (version 9+)
+- Docker (optional, required for local Container App simulation)
+- Azure Functions Core Tools (v4+)
 
 ### Local Backend Development
 
-Navigate to the project root directory and follow these steps to configure the FastAPI application.
+Initialize and start the FastAPI backend service.
 
 ```bash
 # 1. Access the backend workspace
 cd backend
 
-# 2. Synchronize Python virtual environment and dependencies using uv
-uv sync
+# 2. Setup the virtual environment and install dependencies
+uv venv
+uv pip install -r requirements.txt
 
 # 3. Configure local environment variables
-cp ../.env.example .env
-# Open .env and add your Azure credentials, Cosmos endpoint, and LITELLM / Gemini API Keys.
+cp .env.example .env
+# Edit .env and supply your local Cosmos DB emulator/service keys
+# and Clerk config variables (CLERK_ISSUER, CLERK_AUTHORIZED_PARTIES)
 
 # 4. Launch the local FastAPI Uvicorn server
 uv run uvicorn app.main:app --reload --port 8080
@@ -257,7 +262,7 @@ pnpm install
 
 # 3. Configure local frontend environment variables
 cp .env.example .env
-# Edit .env and match the Entra client ID and authority,
+# Edit .env and set your Clerk publishable key (VITE_CLERK_PUBLISHABLE_KEY),
 # or point VITE_API_BASE_URL to your local backend (http://localhost:8080).
 
 # 4. Start the Vite React development server
@@ -332,11 +337,11 @@ curl -X GET https://chatbot-backend.<unique-identifier>.<region>.azurecontainera
 
 ### 2. Send a Secure Chat Message
 
-Authentication is required for all chat routes. Once authenticated via Entra ID, pass the JWT token inside the `Authorization` header.
+Authentication is required for all chat routes. Once authenticated via Clerk, pass the session JWT token inside the `Authorization` header.
 
 ```bash
 curl -X POST https://chatbot-backend.<unique-identifier>.<region>.azurecontainerapps.io/chat \
-  -H "Authorization: Bearer <your_entra_id_jwt_token>" \
+  -H "Authorization: Bearer <your_clerk_jwt_token>" \
   -H "Content-Type: application/json" \
   -d '{
     "message": "What are the benefits of event-driven architectures?",
@@ -350,7 +355,7 @@ For streaming, connect directly to the streaming Container App endpoint using Se
 
 ```bash
 curl -N -X POST https://chatbot-backend.<unique-identifier>.<region>.azurecontainerapps.io/chat/stream \
-  -H "Authorization: Bearer <your_entra_id_jwt_token>" \
+  -H "Authorization: Bearer <your_clerk_jwt_token>" \
   -H "Content-Type: application/json" \
   -d '{
     "message": "Explain quantum computing in one sentence.",
@@ -377,9 +382,10 @@ All application parameters are loaded by `pydantic-settings` from environment va
 | **AZURE_INGESTION_QUEUE_NAME**           | `ingestion-queue`              | Storage queue for asynchronous processing coordination         |
 | **AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT** | _None_                         | AI Document Intelligence endpoint for OCR layouts              |
 | **AZURE_DOCUMENT_INTELLIGENCE_KEY**      | _None_                         | Credentials API key for Document Intelligence                  |
-| **AZURE_TENANT_ID**                      | _None_                         | Microsoft Entra ID tenant registration ID                      |
-| **AZURE_CLIENT_ID**                      | _None_                         | Microsoft Entra ID client application ID                       |
-| **ENTRA_AUTHORITY**                      | _None_                         | Entra identity provider login authority endpoint               |
+| **CLERK_ISSUER**                         | _None_                         | Clerk instance Frontend API URL (OIDC Issuer)                  |
+| **CLERK_JWKS_URL**                       | _None_                         | Explicit Clerk JWKS URL (optional, derived if not set)         |
+| **CLERK_AUTHORIZED_PARTIES**             | _None_                         | Comma-separated list of allowed client origin origins (e.g. localhost)|
+| **CLERK_SECRET_KEY**                     | _None_                         | Clerk backend API secret key (stored in Key Vault in prod)     |
 | **LITELLM_MODEL**                        | `gpt-4o-mini`                  | Core LLM model router string                                   |
 | **LITELLM_VISION_MODEL**                 | `gemini/gemini-3.1-flash-lite` | Vision model used for multimodal image chats                   |
 | **LITELLM_EMBEDDING_MODEL**              | `gemini/gemini-embedding-2`    | Embedding model used for RAG indexing                          |
