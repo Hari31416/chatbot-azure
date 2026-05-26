@@ -38,6 +38,8 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
         { name: 'COSMOS_ENDPOINT', value: cosmosEndpoint }
         { name: 'AZURE_KEYVAULT_NAME', value: keyVaultName }
         { name: 'AZURE_STORAGE_ACCOUNT_NAME', value: storageAccountName }
+        { name: 'AZURE_STORAGE_STAGING_CONTAINER', value: 'staging' }
+        { name: 'AZURE_STORAGE_CONTAINER_NAME', value: 'uploads' }
       ]
     }
     reserved: true // Required for Linux

@@ -18,6 +18,7 @@ from ..dependencies import (
     get_repository,
     get_settings,
     get_storage,
+    get_staging_storage,
     get_vector_store,
     get_vision_llm_client,
 )
@@ -544,7 +545,7 @@ async def chat_image(
 async def ingest_rag_text(
     payload: RagIngestRequest,
     repo=Depends(get_repository),
-    storage=Depends(get_storage),
+    storage=Depends(get_staging_storage),
     user_id: str = Depends(get_current_user_id),
 ) -> RagIngestResponse:
     logger.info("RAG ingest request filename=%s user_id=%s", payload.filename, user_id)
@@ -561,10 +562,10 @@ async def ingest_rag_text(
         "processing",
     )
 
-    s3_key = f"staging/{user_id}/{document_id}/{payload.filename}"
+    blob_key = f"{user_id}/{document_id}/{payload.filename}"
     await to_thread.run_sync(
         storage.upload_bytes,
-        s3_key,
+        blob_key,
         payload.content.encode("utf-8"),
         "text/plain"
     )
@@ -585,7 +586,7 @@ async def ingest_rag_text(
 async def ingest_rag_file(
     file: UploadFile = File(...),
     repo=Depends(get_repository),
-    storage=Depends(get_storage),
+    storage=Depends(get_staging_storage),
     user_id: str = Depends(get_current_user_id),
 ) -> RagIngestResponse:
     filename = file.filename or "uploaded_document"
@@ -620,11 +621,11 @@ async def ingest_rag_file(
         "processing",
     )
 
-    # 3. Upload raw file to S3 under staging prefix
-    s3_key = f"staging/{user_id}/{document_id}/{filename}"
+    # 3. Upload to staging container (triggers Event Grid → ingestion queue)
+    blob_key = f"{user_id}/{document_id}/{filename}"
     await to_thread.run_sync(
         storage.upload_bytes,
-        s3_key,
+        blob_key,
         data,
         file.content_type or "application/octet-stream"
     )

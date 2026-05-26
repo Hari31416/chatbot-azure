@@ -8,6 +8,8 @@ param logAnalyticsWorkspaceSharedKey string
 param keyVaultName string
 param cosmosEndpoint string
 param storageAccountName string
+param clerkIssuer string = ''
+param clerkAuthorizedParties string = ''
 
 resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
   name: 'crchatbot${resourceToken}'
@@ -85,6 +87,18 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
             {
               name: 'AZURE_STORAGE_ACCOUNT_NAME'
               value: storageAccountName
+            }
+            {
+              name: 'AZURE_STORAGE_STAGING_CONTAINER'
+              value: 'staging'
+            }
+            {
+              name: 'CLERK_ISSUER'
+              value: clerkIssuer
+            }
+            {
+              name: 'CLERK_AUTHORIZED_PARTIES'
+              value: clerkAuthorizedParties
             }
           ]
         }

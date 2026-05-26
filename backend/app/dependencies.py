@@ -48,6 +48,23 @@ def get_storage() -> StorageService:
 
 
 @lru_cache
+def get_staging_storage() -> StorageService:
+    """Blob container watched by Event Grid for RAG ingestion."""
+    settings = get_settings()
+
+    conn_str = get_secret("storage-connection-string")
+    if not conn_str:
+        conn_str = settings.azure_storage_connection_string
+    if not conn_str:
+        conn_str = "UseDevelopmentStorage=true"
+
+    return StorageService(
+        connection_string=conn_str,
+        container_name=settings.azure_storage_staging_container,
+    )
+
+
+@lru_cache
 def get_cosmos_client() -> CosmosClient:
     settings = get_settings()
     endpoint = settings.cosmos_endpoint or "https://localhost:8081"
@@ -96,6 +113,12 @@ def get_keyvault_client() -> SecretClient | None:
     vault_url = f"https://{settings.azure_keyvault_name}.vault.azure.net"
     credential = DefaultAzureCredential()
     return SecretClient(vault_url=vault_url, credential=credential)
+
+
+def get_clerk_secret_key() -> str | None:
+    """Clerk Backend API secret — Key Vault first, then CLERK_SECRET_KEY env."""
+    settings = get_settings()
+    return get_secret("clerk-secret-key") or settings.clerk_secret_key
 
 
 @lru_cache
@@ -232,16 +255,124 @@ def get_jwks(jwks_url: str) -> dict:
         return {"keys": []}
 
 
+def _verify_clerk_token(token: str, settings: Settings) -> dict[str, Any]:
+    import jwt
+    from jwt.algorithms import RSAAlgorithm
+
+    jwks_url = settings.clerk_jwks_uri
+    if not jwks_url:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Clerk JWKS URL is not configured",
+        )
+
+    # 1. Unverified decode to inspect claims and perform normalization check
+    try:
+        unverified_payload = jwt.decode(token, options={"verify_signature": False})
+    except Exception as e:
+        logger.warning("Failed to decode token without verification: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid token format: {str(e)}",
+        )
+
+    token_issuer = unverified_payload.get("iss")
+    if not token_issuer:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token is missing issuer ('iss') claim",
+        )
+
+    expected_issuer = settings.clerk_issuer
+    if expected_issuer:
+        norm_expected = expected_issuer.rstrip("/")
+        norm_token_iss = token_issuer.rstrip("/")
+        if norm_expected != norm_token_iss:
+            logger.warning(
+                "Issuer mismatch: expected %s, token has %s",
+                norm_expected,
+                norm_token_iss,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=f"Issuer mismatch: expected {norm_expected}, got {norm_token_iss}",
+            )
+
+    unverified_header = jwt.get_unverified_header(token)
+    kid = unverified_header.get("kid")
+    jwks = get_jwks(jwks_url)
+
+    public_key: Any = None
+    for key in jwks.get("keys", []):
+        if key.get("kid") == kid:
+            public_key = RSAAlgorithm.from_jwk(key)
+            break
+
+    if not public_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token key ID not found in Clerk JWKS",
+        )
+
+    # 2. Cryptographic signature and time check with 60-second leeway for clock skew
+    decode_options: dict[str, Any] = {"verify_exp": True, "verify_aud": False}
+    try:
+        payload = jwt.decode(
+            token,
+            cast(Any, public_key),
+            algorithms=["RS256"],
+            issuer=token_issuer,  # Pass token issuer to avoid slash mismatch, we validated it normalized above
+            options=decode_options,
+            leeway=60,
+        )
+    except jwt.exceptions.ExpiredSignatureError as e:
+        logger.warning(
+            "JWT validation failed: token expired. exp=%s, current=%s, error=%s",
+            unverified_payload.get("exp"),
+            time.time(),
+            e,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Token has expired: {str(e)}",
+        )
+    except Exception as e:
+        logger.warning("JWT validation failed: signature verification failed. error=%s", e)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Signature verification failed: {str(e)}",
+        )
+
+    # 3. Normalized Authorized Parties (azp) validation
+    parties = settings.clerk_authorized_parties
+    if parties:
+        azp = payload.get("azp")
+        if azp:
+            norm_azp = azp.rstrip("/")
+            expected_parties = [p.rstrip("/") for p in (parties if isinstance(parties, list) else [parties])]
+            if norm_azp not in expected_parties:
+                logger.warning(
+                    "Invalid authorized party (azp): got %s, expected one of %s",
+                    norm_azp,
+                    expected_parties,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail=f"Invalid authorized party (azp): got {azp}, expected one of {parties}",
+                )
+
+    return payload
+
+
 def get_current_user_id(
     request: Request, settings: Settings = Depends(get_settings)
 ) -> str:
-    # 1. Extract and Validate Bearer Token from Authorization Header
     auth_header = request.headers.get("Authorization")
     if auth_header and auth_header.startswith("Bearer "):
         token = auth_header.split(" ")[1]
 
         if token and (len(token) < 50 or token.count(".") != 2):
-            if settings.azure_tenant_id:
+            if settings.auth_enabled:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Invalid token format",
@@ -251,37 +382,9 @@ def get_current_user_id(
         try:
             import jwt
 
-            unverified_header = jwt.get_unverified_header(token)
-            kid = unverified_header.get("kid")
-
-            if settings.azure_tenant_id:
-                jwks_url = f"https://login.microsoftonline.com/{settings.azure_tenant_id}/discovery/v2.0/keys"
-                jwks = get_jwks(jwks_url)
-
-                public_key: Any = None
-                for key in jwks.get("keys", []):
-                    if key.get("kid") == kid:
-                        from jwt.algorithms import RSAAlgorithm
-
-                        public_key = RSAAlgorithm.from_jwk(key)
-                        break
-
-                if public_key:
-                    payload = jwt.decode(
-                        token,
-                        cast(Any, public_key),
-                        algorithms=["RS256"],
-                        audience=settings.azure_client_id,
-                        options={"verify_exp": True},
-                    )
-                    return _first_string_claim(
-                        payload, ("sub", "email", "preferred_username", "oid")
-                    )
-
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Token key ID not found in Entra JWKS",
-                )
+            if settings.auth_enabled:
+                payload = _verify_clerk_token(token, settings)
+                return _first_string_claim(payload, ("sub",))
 
             logger.warning(
                 "JWKS validation skipped. Performing unverified decode for fallback."
@@ -291,13 +394,15 @@ def get_current_user_id(
                 payload, ("sub", "email", "preferred_username"), default="admin"
             )
 
+        except HTTPException:
+            raise
         except Exception as e:
             logger.warning("JWT validation failed: %s", e)
-            if settings.azure_tenant_id:
+            if settings.auth_enabled:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail=f"Signature verification failed: {str(e)}",
-                )
+                ) from e
             try:
                 import jwt
 
@@ -306,21 +411,23 @@ def get_current_user_id(
             except Exception:
                 return "admin"
 
-    # 2. Custom Local Headers
     x_user = request.headers.get("X-User-ID")
     if x_user:
         return x_user
 
-    # Strict auth in production (non-localhost)
     import sys
+
     is_testing = "pytest" in sys.modules
-    
+
     is_local = True
     if settings.cosmos_endpoint and not is_testing:
-        if "localhost" not in settings.cosmos_endpoint and "127.0.0.1" not in settings.cosmos_endpoint:
+        if (
+            "localhost" not in settings.cosmos_endpoint
+            and "127.0.0.1" not in settings.cosmos_endpoint
+        ):
             is_local = False
 
-    if settings.azure_tenant_id or not is_local:
+    if settings.auth_enabled or not is_local:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authorization header is required",

@@ -10,6 +10,10 @@ param location string
 param liteLlmApiKey string = ''
 @secure()
 param liteLlmVisionApiKey string = ''
+@secure()
+param clerkSecretKey string = ''
+param clerkIssuer string = ''
+param clerkAuthorizedParties string = ''
 
 @description('Unique resource token for naming')
 var resourceToken = toLower(uniqueString(subscription().id, environmentName, location))
@@ -111,6 +115,8 @@ module containerApps './modules/container-apps.bicep' = {
     keyVaultName: keyVaultName
     cosmosEndpoint: cosmos.outputs.cosmosEndpoint
     storageAccountName: storage.outputs.storageAccountName
+    clerkIssuer: clerkIssuer
+    clerkAuthorizedParties: clerkAuthorizedParties
   }
 }
 
@@ -144,6 +150,7 @@ module keyvault './modules/keyvault.bicep' = {
     docIntelKey: docIntelligence.outputs.key
     litellmApiKey: liteLlmApiKey
     litellmVisionApiKey: liteLlmVisionApiKey
+    clerkSecretKey: clerkSecretKey
   }
 }
 
@@ -159,3 +166,4 @@ output AZURE_CONTAINER_REGISTRY_LOGIN_SERVER string = containerApps.outputs.cont
 output BACKEND_URL string = containerApps.outputs.containerAppFqdn
 output FRONTEND_URL string = staticWebApp.outputs.staticWebAppUrl
 output AZURE_SWA_DEPLOYMENT_TOKEN string = staticWebApp.outputs.deploymentToken
+output FUNCTION_APP_NAME string = functions.outputs.functionAppName

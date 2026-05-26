@@ -67,12 +67,12 @@ async def process_staging_file(user_id: str, document_id: str, filename: str) ->
     using Azure services (Blob Storage, Document Intelligence, Cosmos DB).
     """
     # Import app dependencies (initialized with Azure env vars)
-    from app.dependencies import get_repository, get_rag_service, get_storage
+    from app.dependencies import get_repository, get_rag_service, get_staging_storage
     from app.utils.time import utcnow_iso
     from anyio import to_thread
 
     repo = get_repository()
-    storage = get_storage()
+    storage = get_staging_storage()
 
     try:
         # 1. Download from staging container

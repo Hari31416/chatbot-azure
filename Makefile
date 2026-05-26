@@ -10,7 +10,7 @@ ifneq ("$(wildcard .env)","")
   export
 endif
 
-.PHONY: deploy-infra deploy-backend deploy-frontend deploy-all
+.PHONY: deploy-infra deploy-backend deploy-functions deploy-frontend deploy-all
 
 deploy-infra:
 	@echo "🚀 Provisioning Azure Infrastructure via Bicep..."
@@ -18,17 +18,24 @@ deploy-infra:
 	  --location $(AZURE_LOCATION) \
 	  --template-file infra/main.bicep \
 	  --parameters environmentName=$(AZURE_ENV_NAME) location=$(AZURE_LOCATION) \
-	               liteLlmApiKey="$(LITELLM_API_KEY)" liteLlmVisionApiKey="$(LITELLM_VISION_API_KEY)"
+	               liteLlmApiKey="$(LITELLM_API_KEY)" liteLlmVisionApiKey="$(LITELLM_VISION_API_KEY)" \
+	               clerkSecretKey="$(CLERK_SECRET_KEY)" \
+	               clerkIssuer="$(CLERK_ISSUER)" \
+	               clerkAuthorizedParties="$(CLERK_AUTHORIZED_PARTIES)"
 
 deploy-backend:
 	@echo "🚀 Building backend container and deploying to Azure Container Apps..."
 	./deploy-backend.sh
 
+deploy-functions:
+	@echo "🚀 Deploying Azure Function ingestion worker..."
+	./deploy-functions.sh
+
 deploy-frontend:
 	@echo "🚀 Compiling React frontend and deploying to Azure Static Web Apps..."
 	./deploy-frontend.sh
 
-deploy-all: deploy-infra deploy-backend deploy-frontend
+deploy-all: deploy-infra deploy-backend deploy-functions deploy-frontend
 	@echo "🎉 Full Azure stack deployment complete!"
 
 show-outputs:
