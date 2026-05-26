@@ -1,40 +1,16 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
-STACK_NAME="${1:-${STACK_NAME:-chat}}"
-AWS_REGION="${AWS_REGION:-ap-south-1}"
+REGISTRY="${AZURE_CONTAINER_REGISTRY:-crchatbotdev}"
+IMAGE_TAG="${IMAGE_TAG:-latest}"
 
-CONFIG_ENV="${CONFIG_ENV:-default}"
-if [[ "$STACK_NAME" == *"staging"* ]]; then
-  CONFIG_ENV="staging"
-fi
-S3_VECTOR_BUCKET_NAME="${S3_VECTOR_BUCKET_NAME:-chatbot-vectors-prod}"
-S3_VECTOR_INDEX_NAME="${S3_VECTOR_INDEX_NAME:-enterprise-kb}"
-LITELLM_EMBEDDING_MODEL="${LITELLM_EMBEDDING_MODEL:-gemini/gemini-embedding-2}"
-EMBEDDING_DIMENSION="${EMBEDDING_DIMENSION:-768}"
+echo "Building and pushing to ACR..."
+az acr build --registry "$REGISTRY" --image "chatbot-backend:$IMAGE_TAG" ./backend
 
-echo "========================================="
-echo "📦 1. Exporting backend requirements..."
-echo "========================================="
-cd backend
-uv export --format requirements-txt --no-hashes --no-emit-project -o requirements.txt
-cd ..
+echo "Updating Container App..."
+az containerapp update \
+  --name chatbot-backend \
+  --resource-group "rg-chatbot-${AZURE_ENV_NAME:-dev}" \
+  --image "$REGISTRY.azurecr.io/chatbot-backend:$IMAGE_TAG"
 
-echo "========================================="
-echo "🛠️ 2. Building SAM AWS resources..."
-echo "========================================="
-sam build --use-container
-
-echo "========================================="
-echo "☁️ 3. Deploying infrastructure to AWS..."
-echo "========================================="
-sam deploy \
-  --stack-name "$STACK_NAME" \
-  --region "$AWS_REGION" \
-  --config-env "$CONFIG_ENV"
-
-
-
-echo "========================================="
-echo "🎉 Backend and infrastructure deployed successfully!"
-echo "========================================="
+echo "Deployment complete!"

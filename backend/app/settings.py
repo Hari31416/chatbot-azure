@@ -11,22 +11,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    aws_region: str = Field(default="us-east-1", validation_alias="AWS_REGION")
-    dynamodb_table_name: str = Field(
-        default="chatbot", validation_alias="DYNAMODB_TABLE_NAME"
-    )
-    dynamodb_endpoint_url: str | None = Field(
-        default=None, validation_alias="DYNAMODB_ENDPOINT_URL"
-    )
-    s3_bucket_name: str = Field(
-        default="chatbot-uploads", validation_alias="S3_BUCKET_NAME"
-    )
-    s3_endpoint_url: str | None = Field(
-        default=None, validation_alias="S3_ENDPOINT_URL"
-    )
-    s3_force_path_style: bool = Field(
-        default=False, validation_alias="S3_FORCE_PATH_STYLE"
-    )
+
 
     # ── Azure Blob Storage Settings ──
     azure_storage_connection_string: str | None = Field(
@@ -76,12 +61,7 @@ class Settings(BaseSettings):
         default=10, validation_alias="MAX_HISTORY_MESSAGES"
     )
 
-    cognito_user_pool_id: str | None = Field(
-        default=None, validation_alias="COGNITO_USER_POOL_ID"
-    )
-    cognito_client_id: str | None = Field(
-        default=None, validation_alias="COGNITO_CLIENT_ID"
-    )
+
 
     # ── Entra Auth (Phase 4) ──
     azure_tenant_id: str | None = Field(
@@ -128,15 +108,7 @@ class Settings(BaseSettings):
         default=None, validation_alias="LITELLM_VISION_BASE_URL"
     )
 
-    s3_vector_bucket_name: str = Field(
-        default="chatbot-vectors-prod", validation_alias="S3_VECTOR_BUCKET_NAME"
-    )
-    s3_vector_index_name: str = Field(
-        default="enterprise-kb", validation_alias="S3_VECTOR_INDEX_NAME"
-    )
-    s3_vector_endpoint_url: str | None = Field(
-        default=None, validation_alias="S3_VECTOR_ENDPOINT_URL"
-    )
+
     litellm_embedding_model: str = Field(
         default="gemini/gemini-embedding-2",
         validation_alias="LITELLM_EMBEDDING_MODEL",

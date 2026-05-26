@@ -306,27 +306,27 @@ export function ChatFeed({
             Serverless Chatbot Platform
           </h1>
           <p className="text-sm text-zinc-450 max-w-sm">
-            Securely authenticated via AWS Cognito. Deployed on AWS Lambda.
+            Securely authenticated via Azure Entra ID. Deployed on Azure Container Apps.
           </p>
 
           <div className="flex gap-2 w-full max-w-md pt-4 justify-center">
             <button
               onClick={() =>
-                setInputText("How does AWS Lambda work in a serverless app?")
+                setInputText("How do Azure Container Apps run serverless containers?")
               }
               className="p-3 text-xs border border-zinc-250 dark:border-zinc-800 bg-white dark:bg-zinc-900 rounded-lg shadow-xs hover:bg-zinc-50 transition text-left w-full cursor-pointer"
             >
-              Cloud Architecture Lambda
+              Cloud Architecture Container Apps
             </button>
             <button
               onClick={() =>
                 setInputText(
-                  "Explain how an S3 bucket hosts static React applications.",
+                  "Explain how Azure Static Web Apps host React applications.",
                 )
               }
               className="p-3 text-xs border border-zinc-250 dark:border-zinc-800 bg-white dark:bg-zinc-900 rounded-lg shadow-xs hover:bg-zinc-50 transition text-left w-full cursor-pointer"
             >
-              SPA Hosting Guidelines
+              SWA Hosting Guidelines
             </button>
           </div>
         </div>

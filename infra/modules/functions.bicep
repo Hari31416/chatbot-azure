@@ -1,6 +1,7 @@
 param location string
 param environmentName string
 param storageAccountConnectionString string
+param appInsightsConnectionString string
 
 resource hostingPlan 'Microsoft.Web/serverfarms@2023-01-01' = {
   name: 'asp-chatbot-worker-${environmentName}'
@@ -30,6 +31,7 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
         { name: 'FUNCTIONS_WORKER_RUNTIME', value: 'python' }
         { name: 'WEBSITE_CONTENTAZUREFILECONNECTIONSTRING', value: storageAccountConnectionString }
         { name: 'WEBSITE_CONTENTSHARE', value: 'func-chatbot-worker-${environmentName}-share' }
+        { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appInsightsConnectionString }
       ]
     }
     reserved: true // Required for Linux
@@ -38,3 +40,4 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
 
 output functionAppPrincipalId string = functionApp.identity.principalId
 output functionAppName string = functionApp.name
+

@@ -1,29 +1,25 @@
-STACK_NAME ?= chat
-AWS_REGION ?= ap-south-1
+AZURE_ENV_NAME ?= dev
+AZURE_LOCATION ?= eastus
 
-export STACK_NAME
-export AWS_REGION
+export AZURE_ENV_NAME
+export AZURE_LOCATION
 
-.PHONY: deploy-backend deploy-frontend deploy-all create-bucket
+.PHONY: deploy-infra deploy-backend deploy-frontend deploy-all
+
+deploy-infra:
+	@echo "🚀 Provisioning Azure Infrastructure via Bicep..."
+	az deployment sub create \
+	  --location $(AZURE_LOCATION) \
+	  --template-file infra/main.bicep \
+	  --parameters environmentName=$(AZURE_ENV_NAME) location=$(AZURE_LOCATION)
 
 deploy-backend:
-	@echo "🚀 Starting isolated backend infrastructure deployment..."
-	./deploy-backend.sh $(STACK_NAME)
+	@echo "🚀 Building backend container and deploying to Azure Container Apps..."
+	./deploy-backend.sh
 
 deploy-frontend:
-	@echo "🚀 Starting React frontend compilation and S3 assets sync..."
-	./deploy-frontend.sh $(STACK_NAME)
+	@echo "🚀 Compiling React frontend and deploying to Azure Static Web Apps..."
+	./deploy-frontend.sh
 
-deploy-all: deploy-backend deploy-frontend
-
-create-bucket:
-	@echo "🪣 Creating S3 bucket s3://chat-hari31416..."
-	aws s3 mb s3://chat-hari31416
-	@echo "🔓 Disabling S3 public access block config..."
-	aws s3api put-public-access-block --bucket chat-hari31416 --public-access-block-configuration "BlockPublicAcls=false,IgnorePublicAcls=false,BlockPublicPolicy=false,RestrictPublicBuckets=false"
-	@echo "🌐 Configuring S3 static website hosting..."
-	aws s3api put-bucket-website --bucket chat-hari31416 --website-configuration '{"IndexDocument":{"Suffix":"index.html"},"ErrorDocument":{"Key":"index.html"}}'
-	@echo "📜 Applying public read bucket policy..."
-	aws s3api put-bucket-policy --bucket chat-hari31416 --policy '{"Version":"2012-10-17","Statement":[{"Sid":"PublicReadGetObject","Effect":"Allow","Principal":"*","Action":"s3:GetObject","Resource":"arn:aws:s3:::chat-hari31416/*"}]}'
-	@echo "🎉 Bucket s3://chat-hari31416 is created and configured as public static website!"
-
+deploy-all: deploy-infra deploy-backend deploy-frontend
+	@echo "🎉 Full Azure stack deployment complete!"
