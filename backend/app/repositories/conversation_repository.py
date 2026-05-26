@@ -1,32 +1,17 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
-from boto3.dynamodb.conditions import Key
-from botocore.exceptions import ClientError
+from azure.cosmos.exceptions import CosmosResourceNotFoundError, CosmosHttpResponseError
 
 logger = logging.getLogger(__name__)
 
 
-def pk_for_conversation(conversation_id: str) -> str:
-    return f"CONV#{conversation_id}"
-
-
-def message_sk(created_at: str, message_id: str) -> str:
-    return f"MSG#{created_at}#{message_id}"
-
-
-def pk_for_user(user_id: str) -> str:
-    return f"USER#{user_id}"
-
-
-def rag_document_sk(created_at: str, document_id: str) -> str:
-    return f"RAGDOC#{created_at}#{document_id}"
-
-
 class ConversationRepository:
-    def __init__(self, table):
-        self._table = table
+    def __init__(self, container: Any) -> None:
+        self._container = container
+        logger.info("ConversationRepository initialised with Cosmos container")
 
     def create_conversation(
         self,
@@ -42,8 +27,11 @@ class ConversationRepository:
             name,
         )
         item = {
-            "pk": pk_for_conversation(conversation_id),
+            "id": f"{conversation_id}_META",
+            "conversationId": conversation_id,
+            "pk": f"CONV#{conversation_id}",
             "sk": "META",
+            "type": "META",
             "conversation_id": conversation_id,
             "created_at": created_at,
             "updated_at": created_at,
@@ -51,23 +39,16 @@ class ConversationRepository:
         }
         if user_id:
             item["user_id"] = user_id
+
         try:
-            self._table.put_item(
-                Item=item,
-                ConditionExpression="attribute_not_exists(pk)",
-            )
-            logger.debug("Conversation created conversation_id=%s", conversation_id)
-        except ClientError as exc:
-            if exc.response["Error"]["Code"] != "ConditionalCheckFailedException":
-                logger.exception(
-                    "DynamoDB error creating conversation conversation_id=%s",
-                    conversation_id,
-                )
-                raise
-            logger.debug(
-                "Conversation already exists, skipping create conversation_id=%s",
+            self._container.upsert_item(body=item)
+            logger.debug("Conversation created in Cosmos DB conversation_id=%s", conversation_id)
+        except CosmosHttpResponseError:
+            logger.exception(
+                "CosmosDB error creating conversation conversation_id=%s",
                 conversation_id,
             )
+            raise
 
     def put_message(
         self,
@@ -87,8 +68,11 @@ class ConversationRepository:
             role,
         )
         item = {
-            "pk": pk_for_conversation(conversation_id),
-            "sk": message_sk(created_at, message_id),
+            "id": f"{conversation_id}_MSG_{message_id}",
+            "conversationId": conversation_id,
+            "pk": f"CONV#{conversation_id}",
+            "sk": f"MSG#{created_at}#{message_id}",
+            "type": "MSG",
             "message_id": message_id,
             "role": role,
             "content": content,
@@ -100,20 +84,30 @@ class ConversationRepository:
             item["attachments"] = attachments
         if user_id:
             item["user_id"] = user_id
-        self._table.put_item(Item=item)
+
+        self._container.upsert_item(body=item)
 
     def get_recent_messages(self, conversation_id: str, limit: int) -> list[dict]:
         logger.debug(
             "get_recent_messages conversation_id=%s limit=%d", conversation_id, limit
         )
-        response = self._table.query(
-            KeyConditionExpression=Key("pk").eq(pk_for_conversation(conversation_id))
-            & Key("sk").begins_with("MSG#"),
-            ScanIndexForward=False,
-            Limit=limit,
+        query = (
+            "SELECT * FROM c WHERE c.conversationId = @convId AND c.type = 'MSG' "
+            "ORDER BY c.created_at DESC"
         )
-        items = response.get("Items", [])
+        params = [
+            {"name": "@convId", "value": conversation_id}
+        ]
+        items = list(self._container.query_items(
+            query=query,
+            parameters=params,
+            partition_key=conversation_id,
+        ))
+        
+        # Trim to limit and reverse to restore chronological order (older first)
+        items = items[:limit]
         items.reverse()
+        
         logger.debug(
             "get_recent_messages returned %d messages conversation_id=%s",
             len(items),
@@ -123,14 +117,20 @@ class ConversationRepository:
 
     def get_context(self, conversation_id: str) -> dict | None:
         logger.debug("get_context conversation_id=%s", conversation_id)
-        response = self._table.get_item(
-            Key={"pk": pk_for_conversation(conversation_id), "sk": "CTX"}
-        )
-        item = response.get("Item")
-        logger.debug(
-            "get_context conversation_id=%s found=%s", conversation_id, item is not None
-        )
-        return item
+        try:
+            item = self._container.read_item(
+                item=f"{conversation_id}_CTX",
+                partition_key=conversation_id,
+            )
+            logger.debug(
+                "get_context conversation_id=%s found=True", conversation_id
+            )
+            return item
+        except CosmosResourceNotFoundError:
+            logger.debug(
+                "get_context conversation_id=%s found=False", conversation_id
+            )
+            return None
 
     def set_context(
         self,
@@ -145,23 +145,29 @@ class ConversationRepository:
             len(messages),
             ttl_epoch,
         )
-        self._table.put_item(
-            Item={
-                "pk": pk_for_conversation(conversation_id),
-                "sk": "CTX",
-                "messages": messages,
-                "ttl": ttl_epoch,
-                "updated_at": updated_at,
-            }
-        )
+        item = {
+            "id": f"{conversation_id}_CTX",
+            "conversationId": conversation_id,
+            "pk": f"CONV#{conversation_id}",
+            "sk": "CTX",
+            "type": "CTX",
+            "messages": messages,
+            "ttl": ttl_epoch,
+            "updated_at": updated_at,
+        }
+        self._container.upsert_item(body=item)
 
     def get_user_conversations(self, user_id: str) -> list[dict]:
         logger.debug("get_user_conversations user_id=%s", user_id)
-        response = self._table.query(
-            IndexName="UserConversationsIndexV2",
-            KeyConditionExpression=Key("user_id").eq(user_id) & Key("sk").eq("META"),
+        query = (
+            "SELECT * FROM c WHERE c.user_id = @userId AND c.type = 'META'"
         )
-        items = response.get("Items", [])
+        params = [{"name": "@userId", "value": user_id}]
+        items = list(self._container.query_items(
+            query=query,
+            parameters=params,
+            enable_cross_partition_query=True,
+        ))
         items.sort(
             key=lambda x: x.get("updated_at", x.get("created_at", "")), reverse=True
         )
@@ -169,10 +175,13 @@ class ConversationRepository:
 
     def get_conversation_meta(self, conversation_id: str) -> dict | None:
         logger.debug("get_conversation_meta conversation_id=%s", conversation_id)
-        response = self._table.get_item(
-            Key={"pk": pk_for_conversation(conversation_id), "sk": "META"}
-        )
-        return response.get("Item")
+        try:
+            return self._container.read_item(
+                item=f"{conversation_id}_META",
+                partition_key=conversation_id,
+            )
+        except CosmosResourceNotFoundError:
+            return None
 
     def update_conversation(
         self, conversation_id: str, name: str, updated_at: str
@@ -180,32 +189,49 @@ class ConversationRepository:
         logger.debug(
             "update_conversation conversation_id=%s name=%s", conversation_id, name
         )
-        self._table.update_item(
-            Key={"pk": pk_for_conversation(conversation_id), "sk": "META"},
-            UpdateExpression="SET #name = :name, updated_at = :updated_at",
-            ExpressionAttributeNames={"#name": "name"},
-            ExpressionAttributeValues={":name": name, ":updated_at": updated_at},
-        )
+        meta = self.get_conversation_meta(conversation_id)
+        if meta:
+            meta["name"] = name
+            meta["updated_at"] = updated_at
+            self._container.upsert_item(body=meta)
 
     def get_all_messages(self, conversation_id: str) -> list[dict]:
         logger.debug("get_all_messages conversation_id=%s", conversation_id)
-        response = self._table.query(
-            KeyConditionExpression=Key("pk").eq(pk_for_conversation(conversation_id))
-            & Key("sk").begins_with("MSG#"),
-            ScanIndexForward=True,
+        query = (
+            "SELECT * FROM c WHERE c.conversationId = @convId AND c.type = 'MSG' "
+            "ORDER BY c.created_at ASC"
         )
-        return response.get("Items", [])
+        params = [
+            {"name": "@convId", "value": conversation_id}
+        ]
+        return list(self._container.query_items(
+            query=query,
+            parameters=params,
+            partition_key=conversation_id,
+        ))
 
     def delete_conversation(self, conversation_id: str) -> None:
         logger.debug("delete_conversation conversation_id=%s", conversation_id)
-        pk = pk_for_conversation(conversation_id)
-        response = self._table.query(KeyConditionExpression=Key("pk").eq(pk))
-        items = response.get("Items", [])
-        if not items:
-            return
-        with self._table.batch_writer() as batch:
-            for item in items:
-                batch.delete_item(Key={"pk": item["pk"], "sk": item["sk"]})
+        query = (
+            "SELECT c.id FROM c WHERE c.conversationId = @convId"
+        )
+        params = [
+            {"name": "@convId", "value": conversation_id}
+        ]
+        items = list(self._container.query_items(
+            query=query,
+            parameters=params,
+            partition_key=conversation_id,
+        ))
+        
+        for item in items:
+            try:
+                self._container.delete_item(
+                    item=item["id"],
+                    partition_key=conversation_id,
+                )
+            except CosmosResourceNotFoundError:
+                pass
 
     def put_rag_document(
         self,
@@ -223,20 +249,22 @@ class ConversationRepository:
             filename,
             status,
         )
-        self._table.put_item(
-            Item={
-                "pk": pk_for_user(user_id),
-                "sk": rag_document_sk(created_at, document_id),
-                "user_id": user_id,
-                "document_id": document_id,
-                "filename": filename,
-                "source_doc": filename,
-                "chunks_ingested": chunks_ingested,
-                "status": status,
-                "created_at": created_at,
-                "updated_at": created_at,
-            }
-        )
+        item = {
+            "id": f"{user_id}_RAGDOC_{document_id}",
+            "conversationId": f"_user_{user_id}",
+            "pk": f"USER#{user_id}",
+            "sk": f"RAGDOC#{created_at}#{document_id}",
+            "type": "RAGDOC",
+            "user_id": user_id,
+            "document_id": document_id,
+            "filename": filename,
+            "source_doc": filename,
+            "chunks_ingested": chunks_ingested,
+            "status": status,
+            "created_at": created_at,
+            "updated_at": created_at,
+        }
+        self._container.upsert_item(body=item)
 
     def update_rag_document_status(
         self,
@@ -253,38 +281,31 @@ class ConversationRepository:
             status,
             chunks_ingested,
         )
-        # Find the document first by querying all rag documents of this user
-        response = self._table.query(
-            KeyConditionExpression=Key("pk").eq(pk_for_user(user_id))
-            & Key("sk").begins_with("RAGDOC#")
-        )
-        items = response.get("Items", [])
-        target_item = None
-        for item in items:
-            if item.get("document_id") == document_id:
-                target_item = item
-                break
-        
-        if not target_item:
+        doc_id = f"{user_id}_RAGDOC_{document_id}"
+        partition_key = f"_user_{user_id}"
+        try:
+            item = self._container.read_item(item=doc_id, partition_key=partition_key)
+            item["status"] = status
+            item["chunks_ingested"] = chunks_ingested
+            item["updated_at"] = updated_at
+            self._container.upsert_item(body=item)
+        except CosmosResourceNotFoundError:
             logger.warning("RAG document not found for update user_id=%s document_id=%s", user_id, document_id)
-            return
-            
-        self._table.update_item(
-            Key={"pk": target_item["pk"], "sk": target_item["sk"]},
-            UpdateExpression="SET #status = :status, chunks_ingested = :chunks_ingested, updated_at = :updated_at",
-            ExpressionAttributeNames={"#status": "status"},
-            ExpressionAttributeValues={
-                ":status": status,
-                ":chunks_ingested": chunks_ingested,
-                ":updated_at": updated_at,
-            }
-        )
 
     def list_rag_documents(self, user_id: str) -> list[dict]:
         logger.debug("list_rag_documents user_id=%s", user_id)
-        response = self._table.query(
-            KeyConditionExpression=Key("pk").eq(pk_for_user(user_id))
-            & Key("sk").begins_with("RAGDOC#"),
-            ScanIndexForward=False,
+        query = (
+            "SELECT * FROM c WHERE c.user_id = @userId AND c.type = 'RAGDOC'"
         )
-        return response.get("Items", [])
+        params = [{"name": "@userId", "value": user_id}]
+        items = list(self._container.query_items(
+            query=query,
+            parameters=params,
+            partition_key=f"_user_{user_id}",
+        ))
+        
+        # Sort newest first
+        items.sort(
+            key=lambda x: x.get("created_at", ""), reverse=True
+        )
+        return items

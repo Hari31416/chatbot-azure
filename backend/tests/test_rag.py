@@ -261,15 +261,13 @@ def test_worker_handler_success() -> None:
     from app.services.rag import RagIngestResult
 
     mock_repo = MagicMock()
-    mock_s3 = MagicMock()
+    mock_storage = MagicMock()
     mock_rag = MagicMock()
     
-    mock_body = MagicMock()
-    mock_body.read.return_value = b"some document text content"
-    mock_s3.get_object.return_value = {"Body": mock_body, "ContentType": "text/plain"}
+    mock_storage.download_bytes.return_value = (b"some document text content", "text/plain")
     
     mock_rag.ingest_document = AsyncMock(return_value=RagIngestResult(document_id="doc-123", chunks_ingested=5))
-    mock_rag.ingest_binary_document = AsyncMock()
+    mock_rag.ingest_binary_document = MagicMock()
     
     event = {
         "Records": [
@@ -289,13 +287,13 @@ def test_worker_handler_success() -> None:
     }
     
     with patch("app.worker.get_repository", return_value=mock_repo), \
-         patch("app.worker.get_s3_client", return_value=mock_s3), \
+         patch("app.worker.get_storage", return_value=mock_storage), \
          patch("app.worker.get_rag_service", return_value=mock_rag):
          
          from app.worker import handler
          handler(event, None)
          
-    mock_s3.get_object.assert_called_with(Bucket="test-bucket", Key="staging/user-456/doc-123/my-file.txt")
+    mock_storage.download_bytes.assert_called_with("staging/user-456/doc-123/my-file.txt")
     
     mock_rag.ingest_document.assert_called_with(
         filename="my-file.txt",
@@ -312,7 +310,7 @@ def test_worker_handler_success() -> None:
         ANY
     )
     
-    mock_s3.delete_object.assert_called_with(Bucket="test-bucket", Key="staging/user-456/doc-123/my-file.txt")
+    mock_storage.delete_blob.assert_called_with("staging/user-456/doc-123/my-file.txt")
 
 
 def test_worker_handler_failure_updates_status() -> None:
@@ -320,11 +318,11 @@ def test_worker_handler_failure_updates_status() -> None:
     from unittest.mock import patch, MagicMock, AsyncMock, ANY
 
     mock_repo = MagicMock()
-    mock_s3 = MagicMock()
+    mock_storage = MagicMock()
     mock_rag = MagicMock()
     
-    # Simulate an error during S3 download
-    mock_s3.get_object.side_effect = Exception("S3 Connection Lost")
+    # Simulate an error during staging download
+    mock_storage.download_bytes.side_effect = Exception("Storage Connection Lost")
     
     event = {
         "Records": [
@@ -344,7 +342,7 @@ def test_worker_handler_failure_updates_status() -> None:
     }
     
     with patch("app.worker.get_repository", return_value=mock_repo), \
-         patch("app.worker.get_s3_client", return_value=mock_s3), \
+         patch("app.worker.get_storage", return_value=mock_storage), \
          patch("app.worker.get_rag_service", return_value=mock_rag):
          
          from app.worker import handler
@@ -360,5 +358,5 @@ def test_worker_handler_failure_updates_status() -> None:
     )
     
     # staging file should still be cleaned up in finally block
-    mock_s3.delete_object.assert_called_with(Bucket="test-bucket", Key="staging/user-456/doc-123/my-file.txt")
+    mock_storage.delete_blob.assert_called_with("staging/user-456/doc-123/my-file.txt")
 

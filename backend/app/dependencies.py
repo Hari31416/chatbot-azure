@@ -9,8 +9,8 @@ from functools import lru_cache
 from typing import Any, cast
 
 import boto3
-from botocore.config import Config
 from fastapi import Depends, HTTPException, Request, status
+from azure.cosmos import CosmosClient
 
 from .repositories.conversation_repository import ConversationRepository
 from .services.llm import LlmClient
@@ -19,6 +19,8 @@ from .services.storage import StorageService
 from .services.vector_store import VectorStoreClient
 from .settings import Settings
 
+logger = logging.getLogger(__name__)
+
 
 @lru_cache
 def get_settings() -> Settings:
@@ -26,39 +28,67 @@ def get_settings() -> Settings:
 
 
 @lru_cache
-def get_dynamodb_table():
+def get_storage() -> StorageService:
     settings = get_settings()
-    resource = boto3.resource(
-        "dynamodb",
-        region_name=settings.aws_region,
-        endpoint_url=settings.dynamodb_endpoint_url,
+    conn_str = settings.azure_storage_connection_string
+    if not conn_str:
+        conn_str = "UseDevelopmentStorage=true"
+    return StorageService(
+        connection_string=conn_str,
+        container_name=settings.azure_storage_container_name,
     )
-    return resource.Table(settings.dynamodb_table_name)
 
 
 @lru_cache
-def get_s3_client():
+def get_cosmos_client() -> CosmosClient:
     settings = get_settings()
-    config = None
-    if settings.s3_force_path_style:
-        config = Config(s3={"addressing_style": "path"})
-    return boto3.client(
-        "s3",
-        region_name=settings.aws_region,
-        endpoint_url=settings.s3_endpoint_url,
-        config=config,
-    )
+    endpoint = settings.cosmos_endpoint or "https://localhost:8081"
+    key = settings.cosmos_key or "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw=="
+    
+    verify = True
+    if "localhost" in endpoint or "127.0.0.1" in endpoint:
+        verify = False
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        os.environ["AZURE_COSMOS_DISABLE_SSL_VERIFICATION"] = "true"
+        
+    return CosmosClient(endpoint, credential=key, connection_verify=verify)
+
+
+@lru_cache
+def get_conversations_container():
+    client = get_cosmos_client()
+    settings = get_settings()
+    db = client.get_database_client(settings.cosmos_database_name)
+    return db.get_container_client(settings.cosmos_conversations_container)
+
+
+@lru_cache
+def get_vectors_container():
+    client = get_cosmos_client()
+    settings = get_settings()
+    db = client.get_database_client(settings.cosmos_database_name)
+    return db.get_container_client(settings.cosmos_vectors_container)
 
 
 def get_repository() -> ConversationRepository:
-    table = get_dynamodb_table()
-    return ConversationRepository(table)
+    container = get_conversations_container()
+    return ConversationRepository(container)
 
 
-def get_storage() -> StorageService:
+@lru_cache
+def get_vector_store() -> VectorStoreClient:
     settings = get_settings()
-    client = get_s3_client()
-    return StorageService(client, settings.s3_bucket_name)
+    container = get_vectors_container()
+    api_key = settings.litellm_embedding_api_key or settings.litellm_vision_api_key
+    if not api_key:
+        api_key = os.getenv("GEMINI_API_KEY")
+    return VectorStoreClient(
+        container=container,
+        embedding_model=settings.litellm_embedding_model,
+        dimension=settings.embedding_dimension,
+        gemini_api_key=api_key,
+    )
 
 
 @lru_cache
@@ -115,33 +145,6 @@ def get_vision_llm_client() -> LlmClient:
 
 
 @lru_cache
-def get_vector_store() -> VectorStoreClient:
-    settings = get_settings()
-    api_key = settings.litellm_embedding_api_key or settings.litellm_vision_api_key
-
-    ssm_param_name = os.getenv("LITELLM_EMBEDDING_API_KEY_PARAMETER")
-    if not ssm_param_name:
-        ssm_param_name = os.getenv("LITELLM_VISION_API_KEY_PARAMETER")
-    if ssm_param_name:
-        ssm_key = get_ssm_parameter(ssm_param_name)
-        if ssm_key:
-            api_key = ssm_key
-
-    if not api_key:
-        api_key = os.getenv("GEMINI_API_KEY")
-
-    return VectorStoreClient(
-        region_name=settings.aws_region,
-        vector_bucket=settings.s3_vector_bucket_name,
-        index_name=settings.s3_vector_index_name,
-        embedding_model=settings.litellm_embedding_model,
-        dimension=settings.embedding_dimension,
-        gemini_api_key=api_key,
-        endpoint_url=settings.s3_vector_endpoint_url,
-    )
-
-
-@lru_cache
 def get_textract_client():
     settings = get_settings()
     return boto3.client(
@@ -156,20 +159,25 @@ def get_rag_service(
     if hasattr(vector_store, "dependency") or type(vector_store).__name__ == "Depends":
         vector_store = get_vector_store()
     settings = get_settings()
-    s3_client = get_s3_client()
+    storage = get_storage()
     textract_client = get_textract_client()
+    
+    # We still instantiate boto3 S3 client to keep compatibility with textract if needed
+    s3_client = None
+    try:
+        s3_client = boto3.client("s3", region_name=settings.aws_region)
+    except Exception:
+        pass
+        
     return RagService(
         vector_store=vector_store,
         chunk_size=settings.rag_chunk_size,
         chunk_overlap=settings.rag_chunk_overlap,
+        storage=storage,
+        textract_client=textract_client,
         s3_client=s3_client,
         s3_bucket_name=settings.s3_bucket_name,
-        textract_client=textract_client,
     )
-
-
-
-logger = logging.getLogger(__name__)
 
 
 # Cache dictionary mapping JWKS URL to (keys_dict, expiry_timestamp)
@@ -185,12 +193,10 @@ def get_jwks(jwks_url: str) -> dict:
     try:
         with urllib.request.urlopen(jwks_url, timeout=5) as response:
             data = json.loads(response.read().decode("utf-8"))
-            # Cache keys for 1 hour (3600 seconds)
             _jwks_cache[jwks_url] = (data, now + 3600)
             return data
     except Exception as e:
         logger.warning("Failed to fetch JWKS from %s: %s", jwks_url, e)
-        # If fetch fails but we have an expired cache entry, return it as fallback
         if jwks_url in _jwks_cache:
             return _jwks_cache[jwks_url][0]
         return {"keys": []}
@@ -206,7 +212,6 @@ def get_current_user_id(
         authorizer = request_context.get("authorizer", {})
         jwt_data = authorizer.get("jwt", {})
         claims = jwt_data.get("claims", {})
-        # Cognito passes user ID/username inside JWT claims
         cognito_user = claims.get("username") or claims.get("sub")
         if cognito_user:
             return cognito_user
@@ -216,7 +221,6 @@ def get_current_user_id(
     if auth_header and auth_header.startswith("Bearer "):
         token = auth_header.split(" ")[1]
 
-        # Local development fallback for short dummy tokens (e.g., "admin")
         if token and (len(token) < 50 or token.count(".") != 2):
             if settings.cognito_user_pool_id:
                 raise HTTPException(
@@ -225,15 +229,12 @@ def get_current_user_id(
                 )
             return token
 
-        # If it looks like a JWT token, attempt to parse and verify it
         try:
             import jwt
 
-            # Unverified header to find key ID (kid)
             unverified_header = jwt.get_unverified_header(token)
             kid = unverified_header.get("kid")
 
-            # Try to fetch and match public keys from Cognito
             if settings.cognito_user_pool_id:
                 jwks_url = f"https://cognito-idp.{settings.aws_region}.amazonaws.com/{settings.cognito_user_pool_id}/.well-known/jwks.json"
                 jwks = get_jwks(jwks_url)
@@ -263,7 +264,6 @@ def get_current_user_id(
                     detail="Token key ID not found in Cognito JWKS",
                 )
 
-            # Fallback 1: Decode without signature verification (useful for local dev)
             logger.warning(
                 "JWKS validation skipped or key not found. Performing unverified decode for fallback."
             )
@@ -292,7 +292,6 @@ def get_current_user_id(
     if x_user:
         return x_user
 
-    # Enforce strict auth in production if no authorization header is provided
     if settings.cognito_user_pool_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

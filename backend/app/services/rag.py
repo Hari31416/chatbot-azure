@@ -26,6 +26,7 @@ class RagService:
         s3_client: Any = None,
         s3_bucket_name: str | None = None,
         textract_client: Any = None,
+        storage: Any = None,
     ) -> None:
         if chunk_size <= 0:
             raise ValueError("chunk_size must be positive")
@@ -37,6 +38,7 @@ class RagService:
         self.s3_client = s3_client
         self.s3_bucket_name = s3_bucket_name
         self.textract_client = textract_client
+        self.storage = storage
 
 
     async def ingest_document(
@@ -71,24 +73,35 @@ class RagService:
         from anyio import to_thread
         from uuid import uuid4
 
-        if not self.s3_client or not self.s3_bucket_name or not self.textract_client:
-            raise ValueError("S3 and Textract clients must be configured to process binary documents")
+        if not self.storage and (not self.s3_client or not self.s3_bucket_name):
+            raise ValueError("Storage client or S3 client must be configured to process binary documents")
+        if not self.textract_client:
+            raise ValueError("Textract client must be configured to process binary documents")
 
         if not document_id:
             document_id = str(uuid4())
         extension = os.path.splitext(filename.lower())[1] or ""
         s3_key = f"rag-raw-uploads/{user_id}/{document_id}{extension}"
 
-        # 1. Upload raw binary to S3
+        # 1. Upload raw binary to S3 or Blob
         logger.info("Uploading raw binary document filename=%s user_id=%s s3_key=%s", filename, user_id, s3_key)
-        await to_thread.run_sync(
-            lambda: self.s3_client.put_object(
-                Bucket=self.s3_bucket_name,
-                Key=s3_key,
-                Body=data,
-                ContentType=mime_type,
+        if self.storage:
+            await to_thread.run_sync(
+                lambda: self.storage.upload_bytes(
+                    key=s3_key,
+                    data=data,
+                    mime_type=mime_type,
+                )
             )
-        )
+        else:
+            await to_thread.run_sync(
+                lambda: self.s3_client.put_object(
+                    Bucket=self.s3_bucket_name,
+                    Key=s3_key,
+                    Body=data,
+                    ContentType=mime_type,
+                )
+            )
 
         try:
             # 2. Trigger AWS Textract asynchronous parsing
@@ -164,15 +177,20 @@ class RagService:
             )
 
         finally:
-            # 6. Ensure S3 temporary raw file deletion
+            # 6. Ensure S3 or Blob temporary raw file deletion
             try:
                 logger.info("Cleaning up temporary raw file s3_key=%s", s3_key)
-                await to_thread.run_sync(
-                    lambda: self.s3_client.delete_object(
-                        Bucket=self.s3_bucket_name,
-                        Key=s3_key,
+                if self.storage:
+                    await to_thread.run_sync(
+                        lambda: self.storage.delete_blob(s3_key)
                     )
-                )
+                else:
+                    await to_thread.run_sync(
+                        lambda: self.s3_client.delete_object(
+                            Bucket=self.s3_bucket_name,
+                            Key=s3_key,
+                        )
+                    )
             except Exception as e:
                 logger.warning(
                     "Failed to clean up temporary raw file s3_key=%s: %s",

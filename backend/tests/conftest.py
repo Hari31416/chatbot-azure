@@ -197,6 +197,19 @@ class InMemoryStorageService:
     def generate_presigned_url(self, key: str, expiration_seconds: int = 3600) -> str:
         return f"http://mock-s3-presigned-url/{key}"
 
+    def generate_sas_url(self, key: str, expiration_seconds: int = 3600) -> str:
+        return self.generate_presigned_url(key, expiration_seconds)
+
+    def download_bytes(self, key: str) -> tuple[bytes, str]:
+        for upload in self.raw_uploads:
+            if upload["key"] == key:
+                return upload["data"], upload["mime_type"]
+        return b"mocked content", "application/octet-stream"
+
+    def delete_blob(self, key: str) -> None:
+        self.raw_uploads = [u for u in self.raw_uploads if u["key"] != key]
+        self.uploads = [u for u in self.uploads if u.s3_key != key]
+
 
 class FakeVectorStore:
     def __init__(self) -> None:

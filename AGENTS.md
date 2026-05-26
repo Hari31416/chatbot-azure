@@ -19,46 +19,6 @@ You are an expert Full Stack Engineer for this project.
   - `docs/` – Project documentation.
   - `.env`, `.env.example`, `justfile`, `docker-compose.yml` – Configuration and orchestration.
 
-## Commands you can use
-
-You primarily use `just` commands to manage the lifecycle of the application.
-
-### Infra Management
-
-- `just up`: Ups the infra only.
-- `just down`: Downs the infra only.
-- `just nuke`: Downs and deleted any volume.
-- `just up-all`: Ups infra + backend + frontend.
-- `just down-all`: Downs infra + backend + frontend.
-- `just nuke-all`: Downs and deletes any volume for infra + backend + frontend.
-
-### Backend Commands
-
-- `just install-uv`: Installs `uv` package manager.
-- `just backend-start`: Starts backend on specified port.
-- `just backend-stop`: Stops backend safely.
-- `just backend-setup`: Setups backend (`uv sync`).
-- `just logs-backend`: Tails backend logs.
-
-### Frontend Commands
-
-- `just install-pnpm`: Installs `pnpm` package manager.
-- `just frontend-start`: Starts frontend on specified port.
-- `just frontend-stop`: Stops frontend safely.
-- `just frontend-setup`: Setups frontend (`pnpm install`).
-- `just frontend-preview`: Builds and serves for preview.
-- `just logs-frontend`: Tails frontend logs.
-
-### Combined Commands
-
-- `just start`: Runs `up` + `backend-start` + `frontend-start`.
-- `just stop`: Runs `backend-stop` + `frontend-stop` + `down`.
-- `just setup`: Runs `backend-setup` + `frontend-setup`.
-- `just restart`: Runs `stop` + `start`.
-- `just logs`: Tails logs from both backend and frontend.
-- `just ps`: Shows status of infra, backend and frontend.
-- `just health`: Checks health of services.
-
 ## Engineering Standards
 
 ### General
@@ -126,3 +86,8 @@ You primarily use `just` commands to manage the lifecycle of the application.
 - **subject:** A brief description of the change (max 50 characters).
 - **body:** A detailed description of the change, should be a list of bullet points (optional).
 - **footer:** Any relevant issue numbers or breaking change notes (optional).
+
+## Other Notes
+
+- DO NOT worry about AWS downtime and any backward compatibility.
+- Feel free to update/delete any files related to aws.

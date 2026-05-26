@@ -28,6 +28,40 @@ class Settings(BaseSettings):
         default=False, validation_alias="S3_FORCE_PATH_STYLE"
     )
 
+    # ── Azure Blob Storage Settings ──
+    azure_storage_connection_string: str | None = Field(
+        default=None, validation_alias="AZURE_STORAGE_CONNECTION_STRING"
+    )
+    azure_storage_account_name: str | None = Field(
+        default=None, validation_alias="AZURE_STORAGE_ACCOUNT_NAME"
+    )
+    azure_storage_container_name: str = Field(
+        default="uploads", validation_alias="AZURE_STORAGE_CONTAINER_NAME"
+    )
+    azure_storage_staging_container: str = Field(
+        default="staging", validation_alias="AZURE_STORAGE_STAGING_CONTAINER"
+    )
+    azure_storage_rag_temp_container: str = Field(
+        default="rag-temp", validation_alias="AZURE_STORAGE_RAG_TEMP_CONTAINER"
+    )
+
+    # ── Azure Cosmos DB Settings ──
+    cosmos_endpoint: str | None = Field(
+        default=None, validation_alias="COSMOS_ENDPOINT"
+    )
+    cosmos_key: str | None = Field(
+        default=None, validation_alias="COSMOS_KEY"
+    )
+    cosmos_database_name: str = Field(
+        default="chatbot", validation_alias="COSMOS_DATABASE_NAME"
+    )
+    cosmos_conversations_container: str = Field(
+        default="conversations", validation_alias="COSMOS_CONTAINER_NAME"
+    )
+    cosmos_vectors_container: str = Field(
+        default="vectors", validation_alias="COSMOS_VECTORS_CONTAINER_NAME"
+    )
+
     context_ttl_seconds: int = Field(
         default=3600, validation_alias="CONTEXT_TTL_SECONDS"
     )

@@ -4,7 +4,7 @@ import logging
 import os
 import urllib.parse
 from anyio import to_thread
-from app.dependencies import get_repository, get_rag_service, get_s3_client, get_settings
+from app.dependencies import get_repository, get_rag_service, get_storage, get_settings
 from app.utils.time import utcnow_iso
 
 logger = logging.getLogger(__name__)
@@ -64,13 +64,11 @@ async def process_staging_file(bucket_name: str, s3_key: str, user_id: str, docu
     repo = get_repository()
     
     try:
-        # 1. Download file content from staging S3
-        s3_client = get_s3_client()
-        response = await to_thread.run_sync(
-            lambda: s3_client.get_object(Bucket=bucket_name, Key=s3_key)
+        # 1. Download file content from staging storage
+        storage = get_storage()
+        data, content_type = await to_thread.run_sync(
+            lambda: storage.download_bytes(s3_key)
         )
-        data = await to_thread.run_sync(response["Body"].read)
-        content_type = response.get("ContentType", "application/octet-stream")
 
         # 2. Determine if it is binary or text
         extension = os.path.splitext(filename.lower())[1] or ""
@@ -137,10 +135,10 @@ async def process_staging_file(bucket_name: str, s3_key: str, user_id: str, docu
     finally:
         # 5. Clean up the staging file
         try:
-            s3_client = get_s3_client()
+            storage = get_storage()
             await to_thread.run_sync(
-                lambda: s3_client.delete_object(Bucket=bucket_name, Key=s3_key)
+                lambda: storage.delete_blob(s3_key)
             )
-            logger.info("Cleaned up staging S3 file: %s", s3_key)
+            logger.info("Cleaned up staging storage file: %s", s3_key)
         except Exception:
-            logger.exception("Failed to clean up staging S3 file: %s", s3_key)
+            logger.exception("Failed to clean up staging storage file: %s", s3_key)
