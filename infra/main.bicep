@@ -49,3 +49,29 @@ module cosmos './modules/cosmos.bicep' = {
 output AZURE_STORAGE_ACCOUNT_NAME string = storage.outputs.storageAccountName
 output COSMOS_ENDPOINT string = cosmos.outputs.cosmosEndpoint
 output COSMOS_DATABASE_NAME string = cosmos.outputs.cosmosDatabaseName
+
+// ── Functions Module (Phase 5) ──
+var storageConnectionString = 'DefaultEndpointsProtocol=https;AccountName=${storage.outputs.storageAccountName};AccountKey=${storage.outputs.storageAccountKey};EndpointSuffix=${environment().suffixes.storage}'
+
+module functions './modules/functions.bicep' = {
+  name: 'functions'
+  scope: rg
+  params: {
+    location: location
+    environmentName: environmentName
+    storageAccountConnectionString: storageConnectionString
+  }
+}
+
+// ── Key Vault Module (Phase 6) ──
+module keyvault './modules/keyvault.bicep' = {
+  name: 'keyvault'
+  scope: rg
+  params: {
+    location: location
+    environmentName: environmentName
+    functionAppPrincipalId: functions.outputs.functionAppPrincipalId
+  }
+}
+
+output AZURE_KEYVAULT_NAME string = keyvault.outputs.keyVaultName

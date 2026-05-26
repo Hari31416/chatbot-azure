@@ -63,5 +63,43 @@ resource lifecyclePolicy 'Microsoft.Storage/storageAccounts/managementPolicies@2
   }
 }
 
+// ── Queue Service (Phase 5) ──
+resource queueService 'Microsoft.Storage/storageAccounts/queueServices@2023-01-01' = {
+  parent: storageAccount
+  name: 'default'
+}
+
+resource ingestionQueue 'Microsoft.Storage/storageAccounts/queueServices/queues@2023-01-01' = {
+  parent: queueService
+  name: 'ingestion-queue'
+  properties: {
+    metadata: {
+      purpose: 'RAG document ingestion pipeline'
+      maxDequeueCount: '3'
+    }
+  }
+}
+
+// Connect Blob Storage events to the Storage Queue
+resource eventGridSubscription 'Microsoft.EventGrid/eventSubscriptions@2023-12-15-preview' = {
+  name: 'blob-to-storage-queue'
+  scope: storageAccount
+  properties: {
+    destination: {
+      endpointType: 'StorageQueue'
+      properties: {
+        resourceId: storageAccount.id
+        queueName: 'ingestion-queue'
+        queueMessageTimeToLiveInSeconds: 1209600  // 14 days (matches SQS DLQ retention)
+      }
+    }
+    filter: {
+      subjectBeginsWith: '/blobServices/default/containers/staging/blobs/'
+      includedEventTypes: ['Microsoft.Storage.BlobCreated']
+    }
+  }
+}
+
 output storageAccountName string = storageAccount.name
 output storageAccountId string = storageAccount.id
+output storageAccountKey string = storageAccount.listKeys().keys[0].value

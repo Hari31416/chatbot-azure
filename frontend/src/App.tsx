@@ -15,7 +15,6 @@ import { useToast } from "@/components/ui/Toast";
 import { useTheme } from "@/components/theme-provider";
 import {
   signUpUser,
-  confirmSignUpUser,
   signInUser,
   signOutUser,
   isUserLoggedIn,
@@ -230,57 +229,37 @@ export function App() {
 
   // --- Authentication Handlers ---
   const handleAuthSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!authEmail.trim() || (!authPassword && authMode !== "VERIFY")) return;
+    e.preventDefault()
 
-    setAuthLoading(true);
+    setAuthLoading(true)
     try {
-      if (authMode === "LOGIN") {
-        await signInUser(authEmail.trim(), authPassword);
-        setIsLoggedIn(true);
+      if (authMode === 'LOGIN') {
+        await signInUser(authEmail.trim(), authPassword)
+        setIsLoggedIn(true)
         toast({
-          title: "Welcome back!",
-          description: "Login successful.",
-          type: "success",
-        });
-      } else if (authMode === "SIGNUP") {
-        await signUpUser(authEmail.trim(), authPassword);
-        setAuthMode("VERIFY");
+          title: 'Welcome back!',
+          description: 'Login successful.',
+          type: 'success',
+        })
+      } else if (authMode === 'SIGNUP') {
+        await signUpUser(authEmail.trim(), authPassword)
+        setIsLoggedIn(true)
         toast({
-          title: "Account Created",
-          description: "Please check your email for the verification code.",
-          type: "info",
-        });
-      } else if (authMode === "VERIFY") {
-        if (!authCode.trim()) {
-          toast({
-            title: "Verification Code Required",
-            description: "Please enter the 6-digit confirmation code.",
-            type: "error",
-          });
-          setAuthLoading(false);
-          return;
-        }
-        await confirmSignUpUser(authEmail.trim(), authCode.trim());
-        setAuthMode("LOGIN");
-        setAuthCode("");
-        setAuthPassword("");
-        toast({
-          title: "Account Verified!",
-          description: "Verification successful. You can now log in.",
-          type: "success",
-        });
+          title: 'Welcome!',
+          description: 'Account created and logged in successfully.',
+          type: 'success',
+        })
       }
     } catch (err: any) {
       toast({
-        title: "Authentication Failed",
-        description: err.message || "Operation failed",
-        type: "error",
-      });
+        title: 'Authentication Failed',
+        description: err.message || 'Operation failed',
+        type: 'error',
+      })
     } finally {
-      setAuthLoading(false);
+      setAuthLoading(false)
     }
-  };
+  }
 
   const handleLogout = () => {
     signOutUser();
@@ -484,7 +463,7 @@ export function App() {
     }
   };
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputText.trim() && selectedImages.length === 0) return;
 
@@ -566,7 +545,7 @@ export function App() {
         };
       });
 
-      const token = getCurrentSessionToken();
+      const token = await getCurrentSessionToken();
       sendChatMessageStream(
         inputText.trim(),
         apiBaseUrl,

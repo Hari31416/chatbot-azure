@@ -8,9 +8,12 @@ import urllib.request
 from functools import lru_cache
 from typing import Any, cast
 
-import boto3
 from fastapi import Depends, HTTPException, Request, status
 from azure.cosmos import CosmosClient
+from azure.identity import DefaultAzureCredential
+from azure.keyvault.secrets import SecretClient
+from azure.ai.documentintelligence import DocumentIntelligenceClient
+from azure.core.credentials import AzureKeyCredential
 
 from .repositories.conversation_repository import ConversationRepository
 from .services.llm import LlmClient
@@ -77,12 +80,41 @@ def get_repository() -> ConversationRepository:
 
 
 @lru_cache
+def get_keyvault_client() -> SecretClient | None:
+    settings = get_settings()
+    if not settings.azure_keyvault_name:
+        return None
+    vault_url = f"https://{settings.azure_keyvault_name}.vault.azure.net"
+    credential = DefaultAzureCredential()
+    return SecretClient(vault_url=vault_url, credential=credential)
+
+
+@lru_cache
+def get_secret(secret_name: str) -> str | None:
+    """Retrieve a secret from Azure Key Vault (replaces get_ssm_parameter)."""
+    client = get_keyvault_client()
+    if not client:
+        return None
+    try:
+        secret = client.get_secret(secret_name)
+        return secret.value
+    except Exception as e:
+        logger.warning("Failed to retrieve secret %s from Key Vault: %s", secret_name, e)
+        return None
+
+
+@lru_cache
 def get_vector_store() -> VectorStoreClient:
     settings = get_settings()
     container = get_vectors_container()
-    api_key = settings.litellm_embedding_api_key or settings.litellm_vision_api_key
+    
+    # Try Key Vault secrets first
+    api_key = get_secret("litellm-vision-api-key") or get_secret("litellm-api-key")
+    if not api_key:
+        api_key = settings.litellm_embedding_api_key or settings.litellm_vision_api_key
     if not api_key:
         api_key = os.getenv("GEMINI_API_KEY")
+        
     return VectorStoreClient(
         container=container,
         embedding_model=settings.litellm_embedding_model,
@@ -91,25 +123,13 @@ def get_vector_store() -> VectorStoreClient:
     )
 
 
-@lru_cache
-def get_ssm_parameter(param_name: str) -> str | None:
-    try:
-        ssm = boto3.client("ssm", region_name=get_settings().aws_region)
-        response = ssm.get_parameter(Name=param_name, WithDecryption=True)
-        return response["Parameter"]["Value"]
-    except Exception:
-        return None
-
-
 def get_llm_client() -> LlmClient:
     settings = get_settings()
     api_key = settings.litellm_api_key
 
-    ssm_param_name = os.getenv("LITELLM_API_KEY_PARAMETER")
-    if ssm_param_name:
-        ssm_key = get_ssm_parameter(ssm_param_name)
-        if ssm_key:
-            api_key = ssm_key
+    vault_key = get_secret("litellm-api-key")
+    if vault_key:
+        api_key = vault_key
 
     return LlmClient(
         model=settings.litellm_model,
@@ -122,20 +142,16 @@ def get_vision_llm_client() -> LlmClient:
     settings = get_settings()
     api_key = settings.litellm_vision_api_key
 
-    ssm_param_name = os.getenv("LITELLM_VISION_API_KEY_PARAMETER")
-    if ssm_param_name:
-        ssm_key = get_ssm_parameter(ssm_param_name)
-        if ssm_key:
-            api_key = ssm_key
+    vault_key = get_secret("litellm-vision-api-key")
+    if vault_key:
+        api_key = vault_key
 
     # Fallback to standard key if no vision API key is configured
     if not api_key:
         api_key = settings.litellm_api_key
-        ssm_param_name_std = os.getenv("LITELLM_API_KEY_PARAMETER")
-        if ssm_param_name_std:
-            ssm_key_std = get_ssm_parameter(ssm_param_name_std)
-            if ssm_key_std:
-                api_key = ssm_key_std
+        vault_key_std = get_secret("litellm-api-key")
+        if vault_key_std:
+            api_key = vault_key_std
 
     return LlmClient(
         model=settings.litellm_vision_model,
@@ -145,12 +161,16 @@ def get_vision_llm_client() -> LlmClient:
 
 
 @lru_cache
-def get_textract_client():
+def get_doc_intelligence_client() -> DocumentIntelligenceClient | None:
     settings = get_settings()
-    return boto3.client(
-        "textract",
-        region_name=settings.aws_region,
-    )
+    endpoint = settings.azure_document_intelligence_endpoint
+    key = settings.azure_document_intelligence_key
+    if endpoint and key:
+        return DocumentIntelligenceClient(
+            endpoint=endpoint,
+            credential=AzureKeyCredential(key),
+        )
+    return None
 
 
 def get_rag_service(
@@ -160,23 +180,14 @@ def get_rag_service(
         vector_store = get_vector_store()
     settings = get_settings()
     storage = get_storage()
-    textract_client = get_textract_client()
-    
-    # We still instantiate boto3 S3 client to keep compatibility with textract if needed
-    s3_client = None
-    try:
-        s3_client = boto3.client("s3", region_name=settings.aws_region)
-    except Exception:
-        pass
+    doc_client = get_doc_intelligence_client()
         
     return RagService(
         vector_store=vector_store,
         chunk_size=settings.rag_chunk_size,
         chunk_overlap=settings.rag_chunk_overlap,
         storage=storage,
-        textract_client=textract_client,
-        s3_client=s3_client,
-        s3_bucket_name=settings.s3_bucket_name,
+        doc_intelligence_client=doc_client,
     )
 
 
@@ -191,7 +202,8 @@ def get_jwks(jwks_url: str) -> dict:
         if now < expiry:
             return cached_val
     try:
-        with urllib.request.urlopen(jwks_url, timeout=5) as response:
+        req = urllib.request.Request(jwks_url, headers={"User-Agent": "FastAPI-Server"})
+        with urllib.request.urlopen(req, timeout=5) as response:
             data = json.loads(response.read().decode("utf-8"))
             _jwks_cache[jwks_url] = (data, now + 3600)
             return data
@@ -205,24 +217,13 @@ def get_jwks(jwks_url: str) -> dict:
 def get_current_user_id(
     request: Request, settings: Settings = Depends(get_settings)
 ) -> str:
-    # 1. AWS Lambda Environment: Extract Cognito claims from API Gateway (if present)
-    aws_event = request.scope.get("aws.event")
-    if aws_event and isinstance(aws_event, dict):
-        request_context = aws_event.get("requestContext", {})
-        authorizer = request_context.get("authorizer", {})
-        jwt_data = authorizer.get("jwt", {})
-        claims = jwt_data.get("claims", {})
-        cognito_user = claims.get("username") or claims.get("sub")
-        if cognito_user:
-            return cognito_user
-
-    # 2. Extract and Validate Bearer Token from Authorization Header
+    # 1. Extract and Validate Bearer Token from Authorization Header
     auth_header = request.headers.get("Authorization")
     if auth_header and auth_header.startswith("Bearer "):
         token = auth_header.split(" ")[1]
 
         if token and (len(token) < 50 or token.count(".") != 2):
-            if settings.cognito_user_pool_id:
+            if settings.azure_tenant_id:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Invalid token format",
@@ -235,8 +236,8 @@ def get_current_user_id(
             unverified_header = jwt.get_unverified_header(token)
             kid = unverified_header.get("kid")
 
-            if settings.cognito_user_pool_id:
-                jwks_url = f"https://cognito-idp.{settings.aws_region}.amazonaws.com/{settings.cognito_user_pool_id}/.well-known/jwks.json"
+            if settings.azure_tenant_id:
+                jwks_url = f"https://login.microsoftonline.com/{settings.azure_tenant_id}/discovery/v2.0/keys"
                 jwks = get_jwks(jwks_url)
 
                 public_key: Any = None
@@ -252,29 +253,29 @@ def get_current_user_id(
                         token,
                         cast(Any, public_key),
                         algorithms=["RS256"],
-                        audience=settings.cognito_client_id,
+                        audience=settings.azure_client_id,
                         options={"verify_exp": True},
                     )
                     return _first_string_claim(
-                        payload, ("sub", "email", "cognito:username")
+                        payload, ("sub", "email", "preferred_username", "oid")
                     )
 
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Token key ID not found in Cognito JWKS",
+                    detail="Token key ID not found in Entra JWKS",
                 )
 
             logger.warning(
-                "JWKS validation skipped or key not found. Performing unverified decode for fallback."
+                "JWKS validation skipped. Performing unverified decode for fallback."
             )
             payload = jwt.decode(token, options={"verify_signature": False})
             return _first_string_claim(
-                payload, ("sub", "email", "cognito:username"), default="admin"
+                payload, ("sub", "email", "preferred_username"), default="admin"
             )
 
         except Exception as e:
             logger.warning("JWT validation failed: %s", e)
-            if settings.cognito_user_pool_id:
+            if settings.azure_tenant_id:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail=f"Signature verification failed: {str(e)}",
@@ -287,12 +288,12 @@ def get_current_user_id(
             except Exception:
                 return "admin"
 
-    # 3. Custom Local Headers
+    # 2. Custom Local Headers
     x_user = request.headers.get("X-User-ID")
     if x_user:
         return x_user
 
-    if settings.cognito_user_pool_id:
+    if settings.azure_tenant_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authorization header is required",

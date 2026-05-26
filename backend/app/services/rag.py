@@ -23,10 +23,8 @@ class RagService:
         vector_store: VectorStoreClient,
         chunk_size: int = 800,
         chunk_overlap: int = 80,
-        s3_client: Any = None,
-        s3_bucket_name: str | None = None,
-        textract_client: Any = None,
         storage: Any = None,
+        doc_intelligence_client: Any = None,
     ) -> None:
         if chunk_size <= 0:
             raise ValueError("chunk_size must be positive")
@@ -35,11 +33,8 @@ class RagService:
         self.vector_store = vector_store
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
-        self.s3_client = s3_client
-        self.s3_bucket_name = s3_bucket_name
-        self.textract_client = textract_client
         self.storage = storage
-
+        self.doc_intelligence_client = doc_intelligence_client
 
     async def ingest_document(
         self, filename: str, content: str, user_id: str, document_id: str | None = None
@@ -69,136 +64,62 @@ class RagService:
         self, filename: str, data: bytes, mime_type: str, user_id: str, document_id: str | None = None
     ) -> RagIngestResult:
         import os
-        import asyncio
         from anyio import to_thread
         from uuid import uuid4
 
-        if not self.storage and (not self.s3_client or not self.s3_bucket_name):
-            raise ValueError("Storage client or S3 client must be configured to process binary documents")
-        if not self.textract_client:
-            raise ValueError("Textract client must be configured to process binary documents")
+        if not self.storage:
+            raise ValueError("Storage client must be configured to process binary documents")
+        if not self.doc_intelligence_client:
+            raise ValueError("Document Intelligence client must be configured to process binary documents")
 
         if not document_id:
             document_id = str(uuid4())
-        extension = os.path.splitext(filename.lower())[1] or ""
-        s3_key = f"rag-raw-uploads/{user_id}/{document_id}{extension}"
 
-        # 1. Upload raw binary to S3 or Blob
-        logger.info("Uploading raw binary document filename=%s user_id=%s s3_key=%s", filename, user_id, s3_key)
-        if self.storage:
-            await to_thread.run_sync(
-                lambda: self.storage.upload_bytes(
-                    key=s3_key,
-                    data=data,
-                    mime_type=mime_type,
-                )
+        # 1. Upload raw binary to temporary staging container
+        temp_key = f"rag-temp/{user_id}/{document_id}/{filename}"
+        logger.info("Uploading raw binary document filename=%s user_id=%s temp_key=%s", filename, user_id, temp_key)
+        await to_thread.run_sync(
+            lambda: self.storage.upload_bytes(
+                key=temp_key,
+                data=data,
+                mime_type=mime_type,
             )
-        else:
-            await to_thread.run_sync(
-                lambda: self.s3_client.put_object(
-                    Bucket=self.s3_bucket_name,
-                    Key=s3_key,
-                    Body=data,
-                    ContentType=mime_type,
-                )
-            )
+        )
 
         try:
-            # 2. Trigger AWS Textract asynchronous parsing
-            logger.info("Triggering Textract async parsing for s3_key=%s", s3_key)
-            response = await to_thread.run_sync(
-                lambda: self.textract_client.start_document_text_detection(
-                    DocumentLocation={
-                        "S3Object": {
-                            "Bucket": self.s3_bucket_name,
-                            "Name": s3_key,
-                        }
-                    }
+            # 2. Analyze with Document Intelligence (prebuilt-layout model)
+            logger.info("Analyzing document with Azure AI Document Intelligence for temp_key=%s", temp_key)
+            
+            poller = await to_thread.run_sync(
+                lambda: self.doc_intelligence_client.begin_analyze_document(
+                    "prebuilt-layout",
+                    analyze_request=data,
+                    content_type=mime_type,
+                    output_content_format="markdown",
                 )
             )
-            job_id = response["JobId"]
-            logger.info("Textract parsing started job_id=%s", job_id)
+            result = await to_thread.run_sync(poller.result)
 
-            # 3. Poll for completion
-            while True:
-                poll_res = await to_thread.run_sync(
-                    lambda: self.textract_client.get_document_text_detection(JobId=job_id)
-                )
-                status = poll_res["JobStatus"]
-                if status == "SUCCEEDED":
-                    break
-                elif status == "FAILED":
-                    raise ValueError(
-                        f"Textract job failed: {poll_res.get('StatusMessage', 'Unknown error')}"
-                    )
-                await asyncio.sleep(1.5)
-
-            # 4. Paginate and gather all blocks, enforcing page limit
-            blocks = []
-            next_token = None
-            first_page = True
-
-            while True:
-                kwargs = {"JobId": job_id}
-                if next_token:
-                    kwargs["NextToken"] = next_token
-
-                page_res = await to_thread.run_sync(
-                    lambda: self.textract_client.get_document_text_detection(**kwargs)
-                )
-
-                if first_page:
-                    pages_count = page_res.get("DocumentMetadata", {}).get("Pages", 1)
-                    logger.info("Detected pages_count=%d", pages_count)
-                    if pages_count > 100:
-                        raise ValueError(
-                            f"Document exceeds maximum page limit of 100 pages (got {pages_count} pages)"
-                        )
-                    first_page = False
-
-                blocks.extend(page_res.get("Blocks", []))
-                next_token = page_res.get("NextToken")
-                if not next_token:
-                    break
-
-            # 5. Extract text lines
-            lines = []
-            for block in blocks:
-                if block.get("BlockType") == "LINE":
-                    text = block.get("Text")
-                    if text:
-                        lines.append(text)
-            extracted_text = "\n".join(lines)
+            # 3. Extract markdown content
+            extracted_text = result.content or ""
             logger.info(
-                "Extracted %d lines (%d chars) from document=%s",
-                len(lines),
-                len(extracted_text),
-                filename,
+                "Extracted %d chars from document=%s using Document Intelligence",
+                len(extracted_text), filename,
             )
+
+            # 4. Check page limit
+            if result.pages and len(result.pages) > 100:
+                raise ValueError(f"Document exceeds 100 page limit (got {len(result.pages)} pages)")
 
         finally:
-            # 6. Ensure S3 or Blob temporary raw file deletion
+            # 5. Clean up temporary staging blob
             try:
-                logger.info("Cleaning up temporary raw file s3_key=%s", s3_key)
-                if self.storage:
-                    await to_thread.run_sync(
-                        lambda: self.storage.delete_blob(s3_key)
-                    )
-                else:
-                    await to_thread.run_sync(
-                        lambda: self.s3_client.delete_object(
-                            Bucket=self.s3_bucket_name,
-                            Key=s3_key,
-                        )
-                    )
+                logger.info("Cleaning up staging blob: %s", temp_key)
+                await to_thread.run_sync(lambda: self.storage.delete_blob(temp_key))
             except Exception as e:
-                logger.warning(
-                    "Failed to clean up temporary raw file s3_key=%s: %s",
-                    s3_key,
-                    e,
-                )
+                logger.warning("Failed to clean up staging blob %s: %s", temp_key, e)
 
-        # 7. Split text and upsert to vector store
+        # 6. Split text and upsert to vector store
         chunks = self.split_text(extracted_text)
         if not chunks:
             return RagIngestResult(document_id=document_id, chunks_ingested=0)

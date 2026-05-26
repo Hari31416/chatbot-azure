@@ -1,16 +1,16 @@
-import * as React from "react";
+import * as React from 'react'
 
 interface AuthGateProps {
-  authMode: "LOGIN" | "SIGNUP" | "VERIFY";
-  setAuthMode: (mode: "LOGIN" | "SIGNUP" | "VERIFY") => void;
-  authEmail: string;
-  setAuthEmail: (email: string) => void;
-  authPassword: string;
-  setAuthPassword: (password: string) => void;
-  authCode: string;
-  setAuthCode: (code: string) => void;
-  authLoading: boolean;
-  handleAuthSubmit: (e: React.FormEvent) => void;
+  authMode: 'LOGIN' | 'SIGNUP' | 'VERIFY'
+  setAuthMode: (mode: 'LOGIN' | 'SIGNUP' | 'VERIFY') => void
+  authEmail: string
+  setAuthEmail: (email: string) => void
+  authPassword: string
+  setAuthPassword: (password: string) => void
+  authCode: string
+  setAuthCode: (code: string) => void
+  authLoading: boolean
+  handleAuthSubmit: (e: React.FormEvent) => void
 }
 
 export function AuthGate({
@@ -18,10 +18,6 @@ export function AuthGate({
   setAuthMode,
   authEmail,
   setAuthEmail,
-  authPassword,
-  setAuthPassword,
-  authCode,
-  setAuthCode,
   authLoading,
   handleAuthSubmit,
 }: AuthGateProps) {
@@ -32,23 +28,20 @@ export function AuthGate({
           <h1 className="text-lg font-bold tracking-tight text-blue-600 dark:text-blue-500">
             Chatbot
           </h1>
-          <p className="text-xs text-zinc-450">
-            {authMode === "LOGIN" && "Sign in to access your chatbot"}
-            {authMode === "SIGNUP" && "Create a free user account"}
-            {authMode === "VERIFY" &&
-              "Enter the confirmation code sent to your email"}
+          <p className="text-xs text-zinc-400">
+            {authMode === 'LOGIN' && 'Sign in to access your chatbot'}
+            {authMode === 'SIGNUP' && 'Create a free user account'}
           </p>
         </div>
 
         <form onSubmit={handleAuthSubmit} className="space-y-4">
           <div>
             <label className="text-[11px] font-semibold text-zinc-500 block mb-1">
-              EMAIL ADDRESS
+              EMAIL ADDRESS (OPTIONAL)
             </label>
             <input
               type="email"
-              required
-              disabled={authMode === "VERIFY" || authLoading}
+              disabled={authLoading}
               value={authEmail}
               onChange={(e) => setAuthEmail(e.target.value)}
               placeholder="you@domain.com"
@@ -56,53 +49,17 @@ export function AuthGate({
             />
           </div>
 
-          {authMode !== "VERIFY" && (
-            <div>
-              <label className="text-[11px] font-semibold text-zinc-500 block mb-1">
-                PASSWORD
-              </label>
-              <input
-                type="password"
-                required
-                disabled={authLoading}
-                value={authPassword}
-                onChange={(e) => setAuthPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full px-3 py-2 text-xs rounded border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 focus:bg-white focus:outline-hidden focus:ring-1 focus:ring-blue-500"
-              />
-            </div>
-          )}
-
-          {authMode === "VERIFY" && (
-            <div>
-              <label className="text-[11px] font-semibold text-zinc-500 block mb-1">
-                CONFIRMATION CODE
-              </label>
-              <input
-                type="text"
-                required
-                disabled={authLoading}
-                value={authCode}
-                onChange={(e) => setAuthCode(e.target.value)}
-                placeholder="123456"
-                maxLength={6}
-                className="w-full px-3 py-2 text-xs text-center tracking-widest font-mono rounded border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 focus:bg-white focus:outline-hidden focus:ring-1 focus:ring-blue-500"
-              />
-            </div>
-          )}
-
           <button
             type="submit"
             disabled={authLoading}
-            className="w-full py-2.5 rounded bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs transition duration-150 disabled:opacity-50"
+            className="w-full py-2.5 rounded bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs transition duration-150 disabled:opacity-50 cursor-pointer"
           >
             {authLoading ? (
-              "Processing..."
+              'Launching Secure Login...'
             ) : (
               <>
-                {authMode === "LOGIN" && "Sign In"}
-                {authMode === "SIGNUP" && "Sign Up"}
-                {authMode === "VERIFY" && "Verify Account"}
+                  {authMode === 'LOGIN' && 'Sign In with Microsoft'}
+                  {authMode === 'SIGNUP' && 'Sign Up with Microsoft'}
               </>
             )}
           </button>
@@ -110,41 +67,30 @@ export function AuthGate({
 
         {/* Mode Switchers */}
         <div className="mt-4 pt-4 border-t border-zinc-150 dark:border-zinc-850 text-center text-xs text-zinc-500">
-          {authMode === "LOGIN" && (
+          {authMode === 'LOGIN' && (
             <p>
-              Don't have an account?{" "}
+              Don't have an account?{' '}
               <button
-                onClick={() => setAuthMode("SIGNUP")}
-                className="text-blue-500 font-semibold hover:underline"
+                onClick={() => setAuthMode('SIGNUP')}
+                className="text-blue-500 font-semibold hover:underline cursor-pointer"
               >
                 Sign Up
               </button>
             </p>
           )}
-          {authMode === "SIGNUP" && (
+          {authMode === 'SIGNUP' && (
             <p>
-              Already have an account?{" "}
+              Already have an account?{' '}
               <button
-                onClick={() => setAuthMode("LOGIN")}
-                className="text-blue-500 font-semibold hover:underline"
+                onClick={() => setAuthMode('LOGIN')}
+                className="text-blue-500 font-semibold hover:underline cursor-pointer"
               >
                 Sign In
-              </button>
-            </p>
-          )}
-          {authMode === "VERIFY" && (
-            <p>
-              Did not receive code?{" "}
-              <button
-                onClick={() => setAuthMode("LOGIN")}
-                className="text-blue-500 font-semibold hover:underline"
-              >
-                Back to Sign In
               </button>
             </p>
           )}
         </div>
       </div>
     </div>
-  );
+  )
 }

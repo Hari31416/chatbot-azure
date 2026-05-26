@@ -83,6 +83,33 @@ class Settings(BaseSettings):
         default=None, validation_alias="COGNITO_CLIENT_ID"
     )
 
+    # ── Entra Auth (Phase 4) ──
+    azure_tenant_id: str | None = Field(
+        default=None, validation_alias="AZURE_TENANT_ID"
+    )
+    azure_client_id: str | None = Field(
+        default=None, validation_alias="AZURE_CLIENT_ID"
+    )
+    entra_authority: str | None = Field(
+        default=None, validation_alias="ENTRA_AUTHORITY"
+    )
+
+    # ── Storage Queue & Document Intelligence (Phase 5) ──
+    azure_ingestion_queue_name: str = Field(
+        default="ingestion-queue", validation_alias="AZURE_INGESTION_QUEUE_NAME"
+    )
+    azure_document_intelligence_endpoint: str | None = Field(
+        default=None, validation_alias="AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT"
+    )
+    azure_document_intelligence_key: str | None = Field(
+        default=None, validation_alias="AZURE_DOCUMENT_INTELLIGENCE_KEY"
+    )
+
+    # ── Azure Key Vault (Phase 6) ──
+    azure_keyvault_name: str | None = Field(
+        default=None, validation_alias="AZURE_KEYVAULT_NAME"
+    )
+
     litellm_model: str = Field(default="gpt-4o-mini", validation_alias="LITELLM_MODEL")
     litellm_api_key: str | None = Field(
         default=None, validation_alias="LITELLM_API_KEY"

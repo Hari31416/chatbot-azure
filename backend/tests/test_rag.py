@@ -143,62 +143,66 @@ class MockVectorStore:
         })
 
 
-class MockS3Client:
+class MockStorage:
     def __init__(self):
         self.uploaded = []
         self.deleted = []
 
-    def put_object(self, Bucket, Key, Body, ContentType):
-        self.uploaded.append({"bucket": Bucket, "key": Key, "body": Body, "content_type": ContentType})
-        return {}
+    def upload_bytes(self, key, data, mime_type):
+        self.uploaded.append({"key": key, "data": data, "mime_type": mime_type})
 
-    def delete_object(self, Bucket, Key):
-        self.deleted.append({"bucket": Bucket, "key": Key})
-        return {}
+    def delete_blob(self, key):
+        self.deleted.append(key)
 
 
-class MockTextractClient:
-    def __init__(self, pages=5, fail_job=False):
+class MockDocumentPage:
+    pass
+
+
+class MockDocumentResult:
+    def __init__(self, pages=5):
+        self.content = "Markdown text content from Document Intelligence"
+        self.pages = [MockDocumentPage() for _ in range(pages)]
+
+
+class MockPoller:
+    def __init__(self, result):
+        self._result = result
+
+    def result(self):
+        return self._result
+
+
+class MockDocumentIntelligenceClient:
+    def __init__(self, pages=5, fail=False):
         self.pages = pages
-        self.fail_job = fail_job
-        self.start_calls = []
-        self.get_calls = []
+        self.fail = fail
+        self.analyze_calls = []
 
-    def start_document_text_detection(self, DocumentLocation):
-        self.start_calls.append(DocumentLocation)
-        return {"JobId": "test-job-id"}
-
-    def get_document_text_detection(self, JobId, NextToken=None):
-        self.get_calls.append({"job_id": JobId, "next_token": NextToken})
-        if self.fail_job:
-            return {"JobStatus": "FAILED", "StatusMessage": "Textract error test"}
-            
-        status = "SUCCEEDED"
-        metadata = {"Pages": self.pages}
-        blocks = [
-            {"BlockType": "LINE", "Text": "Line 1 from Textract"},
-            {"BlockType": "LINE", "Text": "Line 2 from Textract"},
-        ]
-        return {
-            "JobStatus": status,
-            "DocumentMetadata": metadata,
-            "Blocks": blocks,
-        }
+    def begin_analyze_document(self, model_id, analyze_request, content_type, output_content_format):
+        self.analyze_calls.append({
+            "model_id": model_id,
+            "data": analyze_request,
+            "content_type": content_type,
+            "output_content_format": output_content_format
+        })
+        if self.fail:
+            raise ValueError("Document Intelligence error test")
+        return MockPoller(MockDocumentResult(pages=self.pages))
 
 
 @pytest.mark.asyncio
 async def test_rag_service_ingest_binary_document_logic() -> None:
     vector_store = MockVectorStore()
-    s3_client = MockS3Client()
-    textract_client = MockTextractClient(pages=5)
+    storage = MockStorage()
+    doc_client = MockDocumentIntelligenceClient(pages=5)
     
     service = RagService(
         vector_store=vector_store,  # type: ignore[arg-type]
         chunk_size=100,
         chunk_overlap=10,
-        s3_client=s3_client,
-        s3_bucket_name="test-bucket",
-        textract_client=textract_client
+        storage=storage,
+        doc_intelligence_client=doc_client
     )
     
     result = await service.ingest_binary_document(
@@ -209,37 +213,35 @@ async def test_rag_service_ingest_binary_document_logic() -> None:
     )
     
     assert result.chunks_ingested == 1
-    assert len(s3_client.uploaded) == 1
-    assert s3_client.uploaded[0]["bucket"] == "test-bucket"
-    assert s3_client.uploaded[0]["body"] == b"pdf binary data"
-    assert s3_client.uploaded[0]["content_type"] == "application/pdf"
+    assert len(storage.uploaded) == 1
+    assert storage.uploaded[0]["data"] == b"pdf binary data"
+    assert storage.uploaded[0]["mime_type"] == "application/pdf"
     
     # Assert cleanup was called
-    assert len(s3_client.deleted) == 1
-    assert s3_client.deleted[0]["key"] == s3_client.uploaded[0]["key"]
+    assert len(storage.deleted) == 1
+    assert storage.deleted[0] == storage.uploaded[0]["key"]
     
-    # Assert Textract was triggered
-    assert len(textract_client.start_calls) == 1
-    assert textract_client.start_calls[0]["S3Object"]["Name"] == s3_client.uploaded[0]["key"]
+    # Assert Document Intelligence was triggered
+    assert len(doc_client.analyze_calls) == 1
+    assert doc_client.analyze_calls[0]["model_id"] == "prebuilt-layout"
     
     # Assert upsert calls
     assert len(vector_store.upserts) == 1
-    assert "Line 1 from Textract" in vector_store.upserts[0]["texts"][0]
+    assert "Markdown text content from Document Intelligence" in vector_store.upserts[0]["texts"][0]
 
 
 @pytest.mark.asyncio
 async def test_rag_service_ingest_binary_document_limit_exceeded() -> None:
     vector_store = MockVectorStore()
-    s3_client = MockS3Client()
-    textract_client = MockTextractClient(pages=105)
+    storage = MockStorage()
+    doc_client = MockDocumentIntelligenceClient(pages=105)
     
     service = RagService(
         vector_store=vector_store,  # type: ignore[arg-type]
         chunk_size=100,
         chunk_overlap=10,
-        s3_client=s3_client,
-        s3_bucket_name="test-bucket",
-        textract_client=textract_client
+        storage=storage,
+        doc_intelligence_client=doc_client
     )
     
     with pytest.raises(ValueError) as excinfo:
@@ -250,12 +252,12 @@ async def test_rag_service_ingest_binary_document_limit_exceeded() -> None:
             user_id="user-123"
         )
         
-    assert "exceeds maximum page limit of 100 pages" in str(excinfo.value)
+    assert "Document exceeds 100 page limit" in str(excinfo.value)
     # Cleanup should still have run even on failure
-    assert len(s3_client.deleted) == 1
+    assert len(storage.deleted) == 1
 
 
-def test_worker_handler_success() -> None:
+def test_function_app_success() -> None:
     import json
     from unittest.mock import patch, MagicMock, AsyncMock, ANY
     from app.services.rag import RagIngestResult
@@ -269,31 +271,28 @@ def test_worker_handler_success() -> None:
     mock_rag.ingest_document = AsyncMock(return_value=RagIngestResult(document_id="doc-123", chunks_ingested=5))
     mock_rag.ingest_binary_document = MagicMock()
     
-    event = {
-        "Records": [
-            {
-                "body": json.dumps({
-                    "Records": [
-                        {
-                            "s3": {
-                                "bucket": {"name": "test-bucket"},
-                                "object": {"key": "staging/user-456/doc-123/my-file.txt"}
-                            }
-                        }
-                    ]
-                })
-            }
-        ]
+    # Event Grid storage queue event body
+    event_body = {
+        "subject": "/blobServices/default/containers/staging/blobs/user-456/doc-123/my-file.txt",
+        "data": {
+            "url": "https://dummy.blob.core.windows.net/staging/user-456/doc-123/my-file.txt"
+        }
     }
     
-    with patch("app.worker.get_repository", return_value=mock_repo), \
-         patch("app.worker.get_storage", return_value=mock_storage), \
-         patch("app.worker.get_rag_service", return_value=mock_rag):
+    class FakeQueueMessage:
+        def get_body(self):
+            return json.dumps(event_body).encode("utf-8")
+            
+    msg = FakeQueueMessage()
+    
+    with patch("app.dependencies.get_repository", return_value=mock_repo), \
+         patch("app.dependencies.get_storage", return_value=mock_storage), \
+         patch("app.dependencies.get_rag_service", return_value=mock_rag):
          
-         from app.worker import handler
-         handler(event, None)
+         from function_app import process_ingestion
+         process_ingestion(msg)
          
-    mock_storage.download_bytes.assert_called_with("staging/user-456/doc-123/my-file.txt")
+    mock_storage.download_bytes.assert_called_with("user-456/doc-123/my-file.txt")
     
     mock_rag.ingest_document.assert_called_with(
         filename="my-file.txt",
@@ -310,10 +309,10 @@ def test_worker_handler_success() -> None:
         ANY
     )
     
-    mock_storage.delete_blob.assert_called_with("staging/user-456/doc-123/my-file.txt")
+    mock_storage.delete_blob.assert_called_with("user-456/doc-123/my-file.txt")
 
 
-def test_worker_handler_failure_updates_status() -> None:
+def test_function_app_failure_updates_status() -> None:
     import json
     from unittest.mock import patch, MagicMock, AsyncMock, ANY
 
@@ -324,29 +323,25 @@ def test_worker_handler_failure_updates_status() -> None:
     # Simulate an error during staging download
     mock_storage.download_bytes.side_effect = Exception("Storage Connection Lost")
     
-    event = {
-        "Records": [
-            {
-                "body": json.dumps({
-                    "Records": [
-                        {
-                            "s3": {
-                                "bucket": {"name": "test-bucket"},
-                                "object": {"key": "staging/user-456/doc-123/my-file.txt"}
-                            }
-                        }
-                    ]
-                })
-            }
-        ]
+    event_body = {
+        "subject": "/blobServices/default/containers/staging/blobs/user-456/doc-123/my-file.txt",
+        "data": {
+            "url": "https://dummy.blob.core.windows.net/staging/user-456/doc-123/my-file.txt"
+        }
     }
     
-    with patch("app.worker.get_repository", return_value=mock_repo), \
-         patch("app.worker.get_storage", return_value=mock_storage), \
-         patch("app.worker.get_rag_service", return_value=mock_rag):
+    class FakeQueueMessage:
+        def get_body(self):
+            return json.dumps(event_body).encode("utf-8")
+            
+    msg = FakeQueueMessage()
+    
+    with patch("app.dependencies.get_repository", return_value=mock_repo), \
+         patch("app.dependencies.get_storage", return_value=mock_storage), \
+         patch("app.dependencies.get_rag_service", return_value=mock_rag):
          
-         from app.worker import handler
-         handler(event, None)
+         from function_app import process_ingestion
+         process_ingestion(msg)
          
     # Repository should be notified of failure
     mock_repo.update_rag_document_status.assert_called_with(
@@ -358,5 +353,6 @@ def test_worker_handler_failure_updates_status() -> None:
     )
     
     # staging file should still be cleaned up in finally block
-    mock_storage.delete_blob.assert_called_with("staging/user-456/doc-123/my-file.txt")
+    mock_storage.delete_blob.assert_called_with("user-456/doc-123/my-file.txt")
+
 
