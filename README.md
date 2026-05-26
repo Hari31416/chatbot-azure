@@ -1,6 +1,6 @@
-# Serverless Corporate Chatbot and RAG Platform on Azure
+# Serverless Chatbot and RAG Platform on Azure
 
-A production-grade, secure, and fully serverless corporate AI Chatbot and RAG (Retrieval-Augmented Generation) platform. The application is built using a decoupled Python FastAPI backend and a TypeScript React SPA frontend. Deployed natively on Azure, the platform achieves serverless real-time streaming, enterprise authentication, and robust asynchronous document ingestion.
+A production-grade, secure, and fully serverless AI Chatbot and RAG (Retrieval-Augmented Generation) platform. The application is built using a decoupled Python FastAPI backend and a TypeScript React SPA frontend. Deployed natively on Azure, the platform achieves serverless real-time streaming, enterprise authentication, and robust asynchronous document ingestion.
 
 The architecture features Server-Sent Events (SSE) streaming through Azure Container Apps, Entra ID-based JWT authentication, private multimodal attachment storage in Azure Blob Storage, and a decoupled event-driven RAG ingestion pipeline using Azure Storage Queues, Azure AI Document Intelligence, and native Cosmos DB for conversation history and vector storage.
 
@@ -53,18 +53,18 @@ graph TD
 
 ### Azure Services Used
 
-| Service | Purpose | Billing Model |
-|---|---|---|
-| **Azure Static Web Apps** | Hosts static compiled React, TypeScript, and CSS assets | Free SKU / Pay-Per-Request |
-| **Azure Container Apps** | Hosts the FastAPI REST API, scaling down to 0 instances when idle | Serverless Consumption |
-| **Azure Functions (Linux)** | Runs the background ingestion queue worker triggered by Storage Queues | Serverless Consumption Plan |
-| **Azure Storage Queues** | Decoupled queue for queuing heavy document parsing and embedding tasks | Pay-Per-Transactions |
-| **Azure Blob Storage** | Secure storage for staging documents and presigned image attachments | Pay-Per-Space + Requests |
-| **Azure Cosmos DB** | Stores conversation history, metadata, and RAG vector embeddings | Pay-Per-Request (Serverless) |
-| **Microsoft Entra ID** | Authenticates users and issues JWT secure tokens | Standard Tier |
-| **Azure AI Document Intelligence** | Extracts layouts and text lines from multi-page PDFs, TIFFs, and PNGs | Pay-Per-Page (Free tier available) |
-| **Azure Key Vault** | Secure encrypted secret store of model API keys and gateway credentials | Pay-Per-Transaction |
-| **Azure Log Analytics & App Insights**| Centrally logs events, monitors server performance, and tracks API usage | Pay-Per-Ingestion (Azure Monitor) |
+| Service                                | Purpose                                                                  | Billing Model                      |
+| -------------------------------------- | ------------------------------------------------------------------------ | ---------------------------------- |
+| **Azure Static Web Apps**              | Hosts static compiled React, TypeScript, and CSS assets                  | Free SKU / Pay-Per-Request         |
+| **Azure Container Apps**               | Hosts the FastAPI REST API, scaling down to 0 instances when idle        | Serverless Consumption             |
+| **Azure Functions (Linux)**            | Runs the background ingestion queue worker triggered by Storage Queues   | Serverless Consumption Plan        |
+| **Azure Storage Queues**               | Decoupled queue for queuing heavy document parsing and embedding tasks   | Pay-Per-Transactions               |
+| **Azure Blob Storage**                 | Secure storage for staging documents and presigned image attachments     | Pay-Per-Space + Requests           |
+| **Azure Cosmos DB**                    | Stores conversation history, metadata, and RAG vector embeddings         | Pay-Per-Request (Serverless)       |
+| **Microsoft Entra ID**                 | Authenticates users and issues JWT secure tokens                         | Standard Tier                      |
+| **Azure AI Document Intelligence**     | Extracts layouts and text lines from multi-page PDFs, TIFFs, and PNGs    | Pay-Per-Page (Free tier available) |
+| **Azure Key Vault**                    | Secure encrypted secret store of model API keys and gateway credentials  | Pay-Per-Transaction                |
+| **Azure Log Analytics & App Insights** | Centrally logs events, monitors server performance, and tracks API usage | Pay-Per-Ingestion (Azure Monitor)  |
 
 ---
 
@@ -84,24 +84,24 @@ graph TD
 
 ## Tech Stack
 
-| Layer | Technology | Key Function |
-|---|---|---|
-| **Backend Core** | Python 3.12, FastAPI | Web API routing, dependency injection, and application logic |
-| **Backend Tools** | LiteLLM, Azure SDK, Pydantic-Settings | LLM routing, Azure API Clients, and environmental settings |
-| **Frontend Core** | TypeScript, React 18, Vite | UI component structure, type safety, and asset bundling |
-| **Frontend Styling** | TailwindCSS, shadcn/ui, Lucide Icons | Responsive layout, theme configuration, and interactive controls |
-| **Infrastructure** | Azure Bicep | Infrastructure as Code (IaC) declaration and subscription deployments |
-| **Compute** | Azure Container Apps, Azure Functions | Serverless API runtime and serverless queue worker runtime |
-| **Database** | Azure Cosmos DB | Conversation history storage and context cache |
-| **Vector DB** | Azure Cosmos DB Vectors | Integrated serverless vector store for RAG embeddings |
-| **Authentication** | Microsoft Entra ID | Enterprise multi-tenant user login and JWT token validation |
-| **Document Processing**| Azure AI Document Intelligence, Storage Queues | Layout extraction, task queuing, and OCR |
+| Layer                   | Technology                                     | Key Function                                                          |
+| ----------------------- | ---------------------------------------------- | --------------------------------------------------------------------- |
+| **Backend Core**        | Python 3.12, FastAPI                           | Web API routing, dependency injection, and application logic          |
+| **Backend Tools**       | LiteLLM, Azure SDK, Pydantic-Settings          | LLM routing, Azure API Clients, and environmental settings            |
+| **Frontend Core**       | TypeScript, React 18, Vite                     | UI component structure, type safety, and asset bundling               |
+| **Frontend Styling**    | TailwindCSS, shadcn/ui, Lucide Icons           | Responsive layout, theme configuration, and interactive controls      |
+| **Infrastructure**      | Azure Bicep                                    | Infrastructure as Code (IaC) declaration and subscription deployments |
+| **Compute**             | Azure Container Apps, Azure Functions          | Serverless API runtime and serverless queue worker runtime            |
+| **Database**            | Azure Cosmos DB                                | Conversation history storage and context cache                        |
+| **Vector DB**           | Azure Cosmos DB Vectors                        | Integrated serverless vector store for RAG embeddings                 |
+| **Authentication**      | Microsoft Entra ID                             | Enterprise multi-tenant user login and JWT token validation           |
+| **Document Processing** | Azure AI Document Intelligence, Storage Queues | Layout extraction, task queuing, and OCR                              |
 
 ---
 
 ## Project Structure
 
-```
+```txt
 chatbot-azure/
 ├── infra/
 │   ├── main.bicep               # Subscription-level Bicep orchestrator
@@ -113,7 +113,7 @@ chatbot-azure/
 │   │   ├── monitoring.bicep     # Log Analytics + Application Insights
 │   │   ├── static-web-app.bicep # Azure Static Web Apps static host
 │   │   └── storage.bicep        # Blob Containers + Storage Queues setup
-│   
+│
 ├── Makefile                 # Automation rules for deploying backend, frontend, and infra
 ├── .env.example             # Template environment variables for local development
 ├── AGENTS.md                # Project standards, commands guide, and developer conventions
@@ -188,7 +188,7 @@ sequenceDiagram
     Client->>ACA: POST /chat/stream (Bearer JWT, ChatRequest)
     Note over ACA: Authenticate User via JWT (Entra ID)
     ACA->>Cosmos: create_conversation & put_message (user)
-    
+
     opt use_rag is True
         ACA->>Cosmos: similarity_search(user_message, user_id)
         Cosmos-->>ACA: Return top-K relevant chunks
@@ -197,17 +197,17 @@ sequenceDiagram
 
     ACA->>Cosmos: get_context(conversation_id)
     Cosmos-->>ACA: Return sliding context (CTX) or history
-    
+
     ACA->>KeyVault: Fetch secret API keys
     KeyVault-->>ACA: Return decrypted secrets
-    
+
     ACA->>LiteLLM: astream(messages)
-    
+
     loop Stream Response Tokens
         LiteLLM-->>ACA: Stream token chunk
         ACA-->>Client: Send Server-Sent Event (data: {text, ...})
     end
-    
+
     ACA->>Cosmos: put_message (assistant) & set_context (new sliding window)
     ACA-->>Client: Send [DONE] event
 ```
@@ -362,32 +362,32 @@ curl -N -X POST https://chatbot-backend.<unique-identifier>.<region>.azurecontai
 
 ## Configuration Reference
 
-All application parameters are loaded by `pydantic-settings` from environment variables (or `.env` files locally). 
+All application parameters are loaded by `pydantic-settings` from environment variables (or `.env` files locally).
 
-| Variable | Default Value | Description |
-|---|---|---|
-| **AZURE_STORAGE_CONNECTION_STRING** | _None_ | Blob Storage connection string (used locally) |
-| **AZURE_STORAGE_ACCOUNT_NAME** | _None_ | Storage account name (used dynamically under Managed Identity) |
-| **AZURE_STORAGE_CONTAINER_NAME** | `uploads` | Secure blob container for chat image uploads |
-| **COSMOS_ENDPOINT** | _None_ | Endpoint URL for Cosmos DB API connection |
-| **COSMOS_KEY** | _None_ | Account credentials key for Cosmos DB (local development) |
-| **COSMOS_DATABASE_NAME** | `chatbot` | Target database within the Cosmos DB Account |
-| **COSMOS_CONTAINER_NAME** | `conversations` | Target NoSQL storage container for messaging records |
-| **AZURE_KEYVAULT_NAME** | _None_ | Vault name hosting LiteLLM integration secrets |
-| **AZURE_INGESTION_QUEUE_NAME** | `ingestion-queue` | Storage queue for asynchronous processing coordination |
-| **AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT**| _None_ | AI Document Intelligence endpoint for OCR layouts |
-| **AZURE_DOCUMENT_INTELLIGENCE_KEY** | _None_ | Credentials API key for Document Intelligence |
-| **AZURE_TENANT_ID** | _None_ | Microsoft Entra ID tenant registration ID |
-| **AZURE_CLIENT_ID** | _None_ | Microsoft Entra ID client application ID |
-| **ENTRA_AUTHORITY** | _None_ | Entra identity provider login authority endpoint |
-| **LITELLM_MODEL** | `gpt-4o-mini` | Core LLM model router string |
-| **LITELLM_VISION_MODEL** | `gemini/gemini-3.1-flash-lite`| Vision model used for multimodal image chats |
-| **LITELLM_EMBEDDING_MODEL** | `gemini/gemini-embedding-2` | Embedding model used for RAG indexing |
-| **EMBEDDING_DIMENSION** | `768` | Dimension count of the dense vector embeddings |
-| **RAG_TOP_K** | `3` | Total retrieved text blocks injected into system prompts |
-| **RAG_CHUNK_SIZE** | `800` | Target characters length per text chunk |
-| **RAG_CHUNK_OVERLAP** | `80` | Overlap character length between neighboring chunks |
-| **CONTEXT_TTL_SECONDS** | `3600` | Expiration lifetime of the Cosmos DB `CTX` cache item |
-| **MAX_HISTORY_MESSAGES** | `10` | Maximum message records cached in the sliding context window |
-| **LOG_FORMAT** | `text` | Logger formatting mode (`text` or `json`) |
-| **LOG_LEVEL** | `INFO` | Level of logging output (DEBUG, INFO, WARNING, ERROR) |
+| Variable                                 | Default Value                  | Description                                                    |
+| ---------------------------------------- | ------------------------------ | -------------------------------------------------------------- |
+| **AZURE_STORAGE_CONNECTION_STRING**      | _None_                         | Blob Storage connection string (used locally)                  |
+| **AZURE_STORAGE_ACCOUNT_NAME**           | _None_                         | Storage account name (used dynamically under Managed Identity) |
+| **AZURE_STORAGE_CONTAINER_NAME**         | `uploads`                      | Secure blob container for chat image uploads                   |
+| **COSMOS_ENDPOINT**                      | _None_                         | Endpoint URL for Cosmos DB API connection                      |
+| **COSMOS_KEY**                           | _None_                         | Account credentials key for Cosmos DB (local development)      |
+| **COSMOS_DATABASE_NAME**                 | `chatbot`                      | Target database within the Cosmos DB Account                   |
+| **COSMOS_CONTAINER_NAME**                | `conversations`                | Target NoSQL storage container for messaging records           |
+| **AZURE_KEYVAULT_NAME**                  | _None_                         | Vault name hosting LiteLLM integration secrets                 |
+| **AZURE_INGESTION_QUEUE_NAME**           | `ingestion-queue`              | Storage queue for asynchronous processing coordination         |
+| **AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT** | _None_                         | AI Document Intelligence endpoint for OCR layouts              |
+| **AZURE_DOCUMENT_INTELLIGENCE_KEY**      | _None_                         | Credentials API key for Document Intelligence                  |
+| **AZURE_TENANT_ID**                      | _None_                         | Microsoft Entra ID tenant registration ID                      |
+| **AZURE_CLIENT_ID**                      | _None_                         | Microsoft Entra ID client application ID                       |
+| **ENTRA_AUTHORITY**                      | _None_                         | Entra identity provider login authority endpoint               |
+| **LITELLM_MODEL**                        | `gpt-4o-mini`                  | Core LLM model router string                                   |
+| **LITELLM_VISION_MODEL**                 | `gemini/gemini-3.1-flash-lite` | Vision model used for multimodal image chats                   |
+| **LITELLM_EMBEDDING_MODEL**              | `gemini/gemini-embedding-2`    | Embedding model used for RAG indexing                          |
+| **EMBEDDING_DIMENSION**                  | `768`                          | Dimension count of the dense vector embeddings                 |
+| **RAG_TOP_K**                            | `3`                            | Total retrieved text blocks injected into system prompts       |
+| **RAG_CHUNK_SIZE**                       | `800`                          | Target characters length per text chunk                        |
+| **RAG_CHUNK_OVERLAP**                    | `80`                           | Overlap character length between neighboring chunks            |
+| **CONTEXT_TTL_SECONDS**                  | `3600`                         | Expiration lifetime of the Cosmos DB `CTX` cache item          |
+| **MAX_HISTORY_MESSAGES**                 | `10`                           | Maximum message records cached in the sliding context window   |
+| **LOG_FORMAT**                           | `text`                         | Logger formatting mode (`text` or `json`)                      |
+| **LOG_LEVEL**                            | `INFO`                         | Level of logging output (DEBUG, INFO, WARNING, ERROR)          |

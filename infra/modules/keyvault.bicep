@@ -4,6 +4,11 @@ param resourceToken string
 param containerAppPrincipalId string = ''
 param functionAppPrincipalId string = ''
 
+@secure()
+param cosmosKey string = ''
+@secure()
+param storageConnectionString string = ''
+
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   name: 'kv-chatbot-${resourceToken}'
   location: location
@@ -42,6 +47,22 @@ resource funcRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01'
     )
     principalId: functionAppPrincipalId
     principalType: 'ServicePrincipal'
+  }
+}
+
+resource cosmosKeySecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (cosmosKey != '') {
+  parent: keyVault
+  name: 'cosmos-key'
+  properties: {
+    value: cosmosKey
+  }
+}
+
+resource storageConnStringSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (storageConnectionString != '') {
+  parent: keyVault
+  name: 'storage-connection-string'
+  properties: {
+    value: storageConnectionString
   }
 }
 

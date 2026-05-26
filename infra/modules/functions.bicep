@@ -2,6 +2,9 @@ param location string
 param environmentName string
 param storageAccountConnectionString string
 param appInsightsConnectionString string
+param cosmosEndpoint string = ''
+param keyVaultName string = ''
+param storageAccountName string = ''
 
 resource hostingPlan 'Microsoft.Web/serverfarms@2023-01-01' = {
   name: 'asp-chatbot-worker-${environmentName}'
@@ -32,6 +35,9 @@ resource functionApp 'Microsoft.Web/sites@2023-01-01' = {
         { name: 'WEBSITE_CONTENTAZUREFILECONNECTIONSTRING', value: storageAccountConnectionString }
         { name: 'WEBSITE_CONTENTSHARE', value: 'func-chatbot-worker-${environmentName}-share' }
         { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appInsightsConnectionString }
+        { name: 'COSMOS_ENDPOINT', value: cosmosEndpoint }
+        { name: 'AZURE_KEYVAULT_NAME', value: keyVaultName }
+        { name: 'AZURE_STORAGE_ACCOUNT_NAME', value: storageAccountName }
       ]
     }
     reserved: true // Required for Linux

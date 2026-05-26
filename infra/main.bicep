@@ -73,6 +73,9 @@ module functions './modules/functions.bicep' = {
     environmentName: environmentName
     storageAccountConnectionString: storageConnectionString
     appInsightsConnectionString: monitoring.outputs.appInsightsConnectionString
+    cosmosEndpoint: cosmos.outputs.cosmosEndpoint
+    keyVaultName: keyVaultName
+    storageAccountName: storage.outputs.storageAccountName
   }
 }
 
@@ -118,6 +121,8 @@ module keyvault './modules/keyvault.bicep' = {
     resourceToken: resourceToken
     functionAppPrincipalId: functions.outputs.functionAppPrincipalId
     containerAppPrincipalId: containerApps.outputs.containerAppPrincipalId
+    cosmosKey: cosmos.outputs.cosmosKey
+    storageConnectionString: storageConnectionString
   }
 }
 

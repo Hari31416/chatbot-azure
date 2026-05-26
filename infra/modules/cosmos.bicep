@@ -79,3 +79,6 @@ output cosmosAccountName string = cosmosAccount.name
 output cosmosEndpoint string = cosmosAccount.properties.documentEndpoint
 output cosmosDatabaseName string = database.name
 
+@secure()
+output cosmosKey string = cosmosAccount.listKeys().primaryMasterKey
+
