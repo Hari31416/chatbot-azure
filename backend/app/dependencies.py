@@ -172,14 +172,23 @@ def get_vision_llm_client() -> LlmClient:
 @lru_cache
 def get_doc_intelligence_client() -> DocumentIntelligenceClient | None:
     settings = get_settings()
-    endpoint = settings.azure_document_intelligence_endpoint
-    key = settings.azure_document_intelligence_key
+    
+    # Try Key Vault secrets first
+    endpoint = get_secret("azure-document-intelligence-endpoint")
+    key = get_secret("azure-document-intelligence-key")
+    
+    if not endpoint:
+        endpoint = settings.azure_document_intelligence_endpoint
+    if not key:
+        key = settings.azure_document_intelligence_key
+        
     if endpoint and key:
         return DocumentIntelligenceClient(
             endpoint=endpoint,
             credential=AzureKeyCredential(key),
         )
     return None
+
 
 
 def get_rag_service(

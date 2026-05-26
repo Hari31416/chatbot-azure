@@ -6,6 +6,11 @@ param environmentName string
 @description('Primary Azure region for all resources')
 param location string
 
+@secure()
+param liteLlmApiKey string = ''
+@secure()
+param liteLlmVisionApiKey string = ''
+
 @description('Unique resource token for naming')
 var resourceToken = toLower(uniqueString(subscription().id, environmentName, location))
 
@@ -53,6 +58,18 @@ module storage './modules/storage.bicep' = {
 // ──────────────────────────────────────────────
 module cosmos './modules/cosmos.bicep' = {
   name: 'cosmos'
+  scope: rg
+  params: {
+    location: location
+    resourceToken: resourceToken
+  }
+}
+
+// ──────────────────────────────────────────────
+// Document Intelligence Module (Phase 5)
+// ──────────────────────────────────────────────
+module docIntelligence './modules/document-intelligence.bicep' = {
+  name: 'doc-intelligence'
   scope: rg
   params: {
     location: location
@@ -123,6 +140,10 @@ module keyvault './modules/keyvault.bicep' = {
     containerAppPrincipalId: containerApps.outputs.containerAppPrincipalId
     cosmosKey: cosmos.outputs.cosmosKey
     storageConnectionString: storageConnectionString
+    docIntelEndpoint: docIntelligence.outputs.endpoint
+    docIntelKey: docIntelligence.outputs.key
+    litellmApiKey: liteLlmApiKey
+    litellmVisionApiKey: liteLlmVisionApiKey
   }
 }
 

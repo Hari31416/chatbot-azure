@@ -65,6 +65,7 @@ Deploy the infrastructure using the unified `Makefile`:
 # Deploys main.bicep to your subscription
 # You can customize these defaults in the Makefile or override them at invocation:
 # e.g., make deploy-infra AZURE_ENV_NAME=prod AZURE_LOCATION=westeurope
+# Note: Make sure LITELLM_API_KEY and LITELLM_VISION_API_KEY are configured in .env before running.
 make deploy-infra
 ```
 
@@ -139,20 +140,37 @@ Since this is a Single Tenant enterprise directory app, you must register users 
 
 ## 🔑 Step 5: Store Secrets in Key Vault
 
-The FastAPI application uses system-assigned managed identity to fetch runtime secrets. You must populate the LiteLLM gateway credentials inside the Key Vault.
+The FastAPI application uses system-assigned managed identity to fetch runtime secrets securely. 
 
-Run the following commands using the Azure CLI:
+> [!TIP]
+> **Automated Provisioning**: The `make deploy-infra` step automatically extracts your `LITELLM_API_KEY` and `LITELLM_VISION_API_KEY` from your local `.env` file and writes them as secrets into the Key Vault during deployment! 
 
+If you want to update them manually later, or if you get a `ForbiddenByRbac` error, follow these steps:
+
+### A. Resolve RBAC Permissions (If Blocked)
+By default, the Key Vault uses Azure RBAC. To list or set secrets, grant your signed-in identity access:
+```bash
+# Get your active CLI Object ID
+USER_OID=$(az ad signed-in-user show --query id --output tsv)
+
+# Assign Key Vault Secrets Officer role
+az role assignment create \
+  --role "Key Vault Secrets Officer" \
+  --assignee "$USER_OID" \
+  --scope "/subscriptions/<your-subscription-id>/resourceGroups/rg-chatbot-dev/providers/Microsoft.KeyVault/vaults/kv-chatbot-jdox4gjgni76y"
+```
+
+### B. Manually Set Secrets (Optional)
 ```bash
 # 1. Store your primary model API key
 az keyvault secret set \
-  --vault-name "kv-chatbot-dev" \
+  --vault-name "kv-chatbot-jdox4gjgni76y" \
   --name "litellm-api-key" \
   --value "<your-api-key>"
 
 # 2. Store your vision model API key
 az keyvault secret set \
-  --vault-name "kv-chatbot-dev" \
+  --vault-name "kv-chatbot-jdox4gjgni76y" \
   --name "litellm-vision-api-key" \
   --value "<your-api-key>"
 ```
@@ -212,3 +230,15 @@ Now that the entire stack is successfully deployed, verify the live environment:
 3. Once authenticated, you will be redirected back to the beautiful chat dashboard.
 4. Try typing a message: "Explain the benefit of Azure Container Apps."
 5. Test the **RAG Document Catalog**: Upload a sample PDF or text file. Watch the system transition the status from `processing` to `ready`, and then ask questions using context-enhanced knowledge!
+
+---
+
+## 🗑️ Step 9: Teardown (Bring Down Infrastructure)
+
+To completely destroy all provisioned resources and stop any active cloud costs, you can delete the entire Azure Resource Group:
+
+```bash
+az group delete --name "rg-chatbot-${AZURE_ENV_NAME:-dev}" --yes --no-wait
+```
+
+*This will immediately request Azure to asynchronously delete all resources (Cosmos DB, Key Vault, Storage, ACA, SWAs) in the background.*

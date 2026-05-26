@@ -8,6 +8,13 @@ param functionAppPrincipalId string = ''
 param cosmosKey string = ''
 @secure()
 param storageConnectionString string = ''
+param docIntelEndpoint string = ''
+@secure()
+param docIntelKey string = ''
+@secure()
+param litellmApiKey string = ''
+@secure()
+param litellmVisionApiKey string = ''
 
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   name: 'kv-chatbot-${resourceToken}'
@@ -63,6 +70,38 @@ resource storageConnStringSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' 
   name: 'storage-connection-string'
   properties: {
     value: storageConnectionString
+  }
+}
+
+resource docIntelEndpointSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (docIntelEndpoint != '') {
+  parent: keyVault
+  name: 'azure-document-intelligence-endpoint'
+  properties: {
+    value: docIntelEndpoint
+  }
+}
+
+resource docIntelKeySecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (docIntelKey != '') {
+  parent: keyVault
+  name: 'azure-document-intelligence-key'
+  properties: {
+    value: docIntelKey
+  }
+}
+
+resource litellmApiKeySecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (litellmApiKey != '') {
+  parent: keyVault
+  name: 'litellm-api-key'
+  properties: {
+    value: litellmApiKey
+  }
+}
+
+resource litellmVisionApiKeySecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (litellmVisionApiKey != '') {
+  parent: keyVault
+  name: 'litellm-vision-api-key'
+  properties: {
+    value: litellmVisionApiKey
   }
 }
 

@@ -163,3 +163,14 @@ This document records the exact changes and adjustments made to the Azure Bicep 
   - **Enforced Block**: Under deployed environments, if neither an OIDC Bearer token nor a developer testing header (`X-User-ID`) is supplied, the backend now strictly raises a `401 Unauthorized` exception rather than falling back to `"admin"`.
   - _Result_: The live API endpoints are now fully secure against unauthenticated direct calls, while maintaining out-of-the-box local development and testing flows.
 
+---
+
+## 12. Automated AI Document Intelligence Provisioning and Secrets Automation
+- **Issue**: The RAG Ingestion pipeline lacked an automated provisioning solution for Azure AI Document Intelligence, requiring manual resource creation in the portal. Additionally, the LiteLLM API and Vision API keys were managed via local environment variables, mimicking AWS SSM Parameter storage.
+- **Resolution**:
+  - **Bicep Automation**: Created a new Bicep module `document-intelligence.bicep` to automatically provision a Standard (`S0`) Azure AI Document Intelligence resource.
+  - **Dynamic Secrets Storage**: Automatically captured the dynamics endpoint and key outputs in `main.bicep` and saved them securely in Azure Key Vault under `azure-document-intelligence-endpoint` and `azure-document-intelligence-key`.
+  - **SSM-Style Secrets Automation**: Integrated local `.env` LiteLLM keys (`LITELLM_API_KEY` and `LITELLM_VISION_API_KEY`) into the `Makefile` parameters target. During provisioning, Bicep securely passes and registers these credentials as `litellm-api-key` and `litellm-vision-api-key` in Key Vault.
+  - **Dynamic Runtime Resolution**: Updated `dependencies.py` to retrieve `azure-document-intelligence-endpoint` and `azure-document-intelligence-key` securely from Key Vault at runtime via system Managed Identities.
+
+
