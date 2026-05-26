@@ -42,11 +42,15 @@ export async function signUpUser(
   _password: string,
 ): Promise<string> {
   const instance = await getMsalInstance()
-  await instance.loginPopup({
+  const result = await instance.loginPopup({
     ...loginRequest,
-    authority: `${msalConfig.auth.authority}/signup`,
     loginHint: email,
   })
+
+  localStorage.setItem('auth_id_token', result.idToken || '')
+  localStorage.setItem('auth_access_token', result.accessToken)
+  localStorage.setItem('auth_user_email', result.account?.username || email)
+
   return email
 }
 
