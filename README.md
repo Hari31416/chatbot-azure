@@ -1,5 +1,8 @@
 # Serverless Chatbot and RAG Platform on Azure
 
+> [!NOTE]
+> **Disclaimer/PoC Status**: This repository is a Proof of Concept (PoC) to port the [chatbot-aws](https://github.com/Hari31416/chatbot-aws) repository (which utilizes AWS) to Azure, based on the codebase at commit hash [`6426de32e2a25cc4bc56e5d66bd9698642489e55`](https://github.com/Hari31416/chatbot-aws/tree/6426de32e2a25cc4bc56e5d66bd9698642489e55). Please note that this Azure-based stack is not actively updated (except potentially for documentation). All new features, bug fixes, and active developments will be committed directly to the parent [chatbot-aws](https://github.com/Hari31416/chatbot-aws) repository. You are free to use, modify, and reference this Azure port as you see fit.
+
 A production-grade, secure, and fully serverless AI Chatbot and RAG (Retrieval-Augmented Generation) platform. The application is built using a decoupled Python FastAPI backend and a TypeScript React SPA frontend. Deployed natively on Azure, the platform achieves serverless real-time streaming, modern user authentication, and robust asynchronous document ingestion.
 
 The architecture features Server-Sent Events (SSE) streaming through Azure Container Apps, Clerk-based JWT authentication, private multimodal attachment storage in Azure Blob Storage, and a decoupled event-driven RAG ingestion pipeline using Azure Storage Queues, Azure AI Document Intelligence, and native Cosmos DB for conversation history and vector storage.
@@ -97,7 +100,7 @@ graph TD
 | **Compute**             | Azure Container Apps, Azure Functions          | Serverless API runtime and serverless queue worker runtime            |
 | **Database**            | Azure Cosmos DB                                | Conversation history storage and context cache                        |
 | **Vector DB**           | Azure Cosmos DB Vectors                        | Integrated serverless vector store for RAG embeddings                 |
-| **Authentication**      | Clerk Auth                                     | Modern user sign-in/up and JWKS token verification                   |
+| **Authentication**      | Clerk Auth                                     | Modern user sign-in/up and JWKS token verification                    |
 | **Document Processing** | Azure AI Document Intelligence, Storage Queues | Layout extraction, task queuing, and OCR                              |
 
 ---
@@ -225,6 +228,7 @@ Follow these steps to run the application components in your local development e
 ### Prerequisites
 
 Ensure you have the following tools installed:
+
 - Python 3.12+ (managed with `uv`)
 - Node.js 18+ and `pnpm` (version 9+)
 - Docker (optional, required for local Container App simulation)
@@ -373,31 +377,31 @@ curl -N -X POST https://chatbot-backend.<unique-identifier>.<region>.azurecontai
 
 All application parameters are loaded by `pydantic-settings` from environment variables (or `.env` files locally).
 
-| Variable                                 | Default Value                  | Description                                                    |
-| ---------------------------------------- | ------------------------------ | -------------------------------------------------------------- |
-| **AZURE_STORAGE_CONNECTION_STRING**      | _None_                         | Blob Storage connection string (used locally)                  |
-| **AZURE_STORAGE_ACCOUNT_NAME**           | _None_                         | Storage account name (used dynamically under Managed Identity) |
-| **AZURE_STORAGE_CONTAINER_NAME**         | `uploads`                      | Secure blob container for chat image uploads                   |
-| **COSMOS_ENDPOINT**                      | _None_                         | Endpoint URL for Cosmos DB API connection                      |
-| **COSMOS_KEY**                           | _None_                         | Account credentials key for Cosmos DB (local development)      |
-| **COSMOS_DATABASE_NAME**                 | `chatbot`                      | Target database within the Cosmos DB Account                   |
-| **COSMOS_CONTAINER_NAME**                | `conversations`                | Target NoSQL storage container for messaging records           |
-| **AZURE_KEYVAULT_NAME**                  | _None_                         | Vault name hosting LiteLLM integration secrets                 |
-| **AZURE_INGESTION_QUEUE_NAME**           | `ingestion-queue`              | Storage queue for asynchronous processing coordination         |
-| **AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT** | _None_                         | AI Document Intelligence endpoint for OCR layouts              |
-| **AZURE_DOCUMENT_INTELLIGENCE_KEY**      | _None_                         | Credentials API key for Document Intelligence                  |
-| **CLERK_ISSUER**                         | _None_                         | Clerk instance Frontend API URL (OIDC Issuer)                  |
-| **CLERK_JWKS_URL**                       | _None_                         | Explicit Clerk JWKS URL (optional, derived if not set)         |
-| **CLERK_AUTHORIZED_PARTIES**             | _None_                         | Comma-separated list of allowed client origin origins (e.g. localhost)|
-| **CLERK_SECRET_KEY**                     | _None_                         | Clerk backend API secret key (stored in Key Vault in prod)     |
-| **LITELLM_MODEL**                        | `gpt-4o-mini`                  | Core LLM model router string                                   |
-| **LITELLM_VISION_MODEL**                 | `gemini/gemini-3.1-flash-lite` | Vision model used for multimodal image chats                   |
-| **LITELLM_EMBEDDING_MODEL**              | `gemini/gemini-embedding-2`    | Embedding model used for RAG indexing                          |
-| **EMBEDDING_DIMENSION**                  | `768`                          | Dimension count of the dense vector embeddings                 |
-| **RAG_TOP_K**                            | `3`                            | Total retrieved text blocks injected into system prompts       |
-| **RAG_CHUNK_SIZE**                       | `800`                          | Target characters length per text chunk                        |
-| **RAG_CHUNK_OVERLAP**                    | `80`                           | Overlap character length between neighboring chunks            |
-| **CONTEXT_TTL_SECONDS**                  | `3600`                         | Expiration lifetime of the Cosmos DB `CTX` cache item          |
-| **MAX_HISTORY_MESSAGES**                 | `10`                           | Maximum message records cached in the sliding context window   |
-| **LOG_FORMAT**                           | `text`                         | Logger formatting mode (`text` or `json`)                      |
-| **LOG_LEVEL**                            | `INFO`                         | Level of logging output (DEBUG, INFO, WARNING, ERROR)          |
+| Variable                                 | Default Value                  | Description                                                            |
+| ---------------------------------------- | ------------------------------ | ---------------------------------------------------------------------- |
+| **AZURE_STORAGE_CONNECTION_STRING**      | _None_                         | Blob Storage connection string (used locally)                          |
+| **AZURE_STORAGE_ACCOUNT_NAME**           | _None_                         | Storage account name (used dynamically under Managed Identity)         |
+| **AZURE_STORAGE_CONTAINER_NAME**         | `uploads`                      | Secure blob container for chat image uploads                           |
+| **COSMOS_ENDPOINT**                      | _None_                         | Endpoint URL for Cosmos DB API connection                              |
+| **COSMOS_KEY**                           | _None_                         | Account credentials key for Cosmos DB (local development)              |
+| **COSMOS_DATABASE_NAME**                 | `chatbot`                      | Target database within the Cosmos DB Account                           |
+| **COSMOS_CONTAINER_NAME**                | `conversations`                | Target NoSQL storage container for messaging records                   |
+| **AZURE_KEYVAULT_NAME**                  | _None_                         | Vault name hosting LiteLLM integration secrets                         |
+| **AZURE_INGESTION_QUEUE_NAME**           | `ingestion-queue`              | Storage queue for asynchronous processing coordination                 |
+| **AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT** | _None_                         | AI Document Intelligence endpoint for OCR layouts                      |
+| **AZURE_DOCUMENT_INTELLIGENCE_KEY**      | _None_                         | Credentials API key for Document Intelligence                          |
+| **CLERK_ISSUER**                         | _None_                         | Clerk instance Frontend API URL (OIDC Issuer)                          |
+| **CLERK_JWKS_URL**                       | _None_                         | Explicit Clerk JWKS URL (optional, derived if not set)                 |
+| **CLERK_AUTHORIZED_PARTIES**             | _None_                         | Comma-separated list of allowed client origin origins (e.g. localhost) |
+| **CLERK_SECRET_KEY**                     | _None_                         | Clerk backend API secret key (stored in Key Vault in prod)             |
+| **LITELLM_MODEL**                        | `gpt-4o-mini`                  | Core LLM model router string                                           |
+| **LITELLM_VISION_MODEL**                 | `gemini/gemini-3.1-flash-lite` | Vision model used for multimodal image chats                           |
+| **LITELLM_EMBEDDING_MODEL**              | `gemini/gemini-embedding-2`    | Embedding model used for RAG indexing                                  |
+| **EMBEDDING_DIMENSION**                  | `768`                          | Dimension count of the dense vector embeddings                         |
+| **RAG_TOP_K**                            | `3`                            | Total retrieved text blocks injected into system prompts               |
+| **RAG_CHUNK_SIZE**                       | `800`                          | Target characters length per text chunk                                |
+| **RAG_CHUNK_OVERLAP**                    | `80`                           | Overlap character length between neighboring chunks                    |
+| **CONTEXT_TTL_SECONDS**                  | `3600`                         | Expiration lifetime of the Cosmos DB `CTX` cache item                  |
+| **MAX_HISTORY_MESSAGES**                 | `10`                           | Maximum message records cached in the sliding context window           |
+| **LOG_FORMAT**                           | `text`                         | Logger formatting mode (`text` or `json`)                              |
+| **LOG_LEVEL**                            | `INFO`                         | Level of logging output (DEBUG, INFO, WARNING, ERROR)                  |
