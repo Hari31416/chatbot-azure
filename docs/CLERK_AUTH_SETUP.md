@@ -25,22 +25,22 @@ This value is **required** for backend JWT validation. It is **not** the same as
 
 ## Keys overview
 
-| Variable | Clerk Dashboard | Where to set | Secret? |
-|----------|-----------------|--------------|---------|
-| `VITE_CLERK_PUBLISHABLE_KEY` | Publishable key | `frontend/.env` only | No (browser-safe) |
-| `CLERK_ISSUER` | **Frontend API URL** | Root `.env` + Container App env | No |
-| `CLERK_AUTHORIZED_PARTIES` | Your app origins | Root `.env` + Container App | No |
-| `CLERK_SECRET_KEY` | Secret key | **Azure Key Vault** (see below) | **Yes** |
+| Variable                     | Clerk Dashboard      | Where to set                    | Secret?           |
+| ---------------------------- | -------------------- | ------------------------------- | ----------------- |
+| `VITE_CLERK_PUBLISHABLE_KEY` | Publishable key      | `frontend/.env` only            | No (browser-safe) |
+| `CLERK_ISSUER`               | **Frontend API URL** | Root `.env` + Container App env | No                |
+| `CLERK_AUTHORIZED_PARTIES`   | Your app origins     | Root `.env` + Container App     | No                |
+| `CLERK_SECRET_KEY`           | Secret key           | **Azure Key Vault** (see below) | **Yes**           |
 
 > **Important:** JWT login for this app works with `CLERK_ISSUER` + JWKS. The secret key is **not** used for validating browser session tokens. Store it in Key Vault for future Clerk Backend API calls or rotation workflows.
 
 ## Where each file lives
 
-| File | Purpose |
-|------|---------|
-| `frontend/.env` | `VITE_CLERK_PUBLISHABLE_KEY`, `VITE_API_BASE_URL` |
-| Root `.env` | `CLERK_ISSUER`, `CLERK_AUTHORIZED_PARTIES`, `AZURE_KEYVAULT_NAME` |
-| Azure Key Vault | `clerk-secret-key` (never commit) |
+| File            | Purpose                                                           |
+| --------------- | ----------------------------------------------------------------- |
+| `frontend/.env` | `VITE_CLERK_PUBLISHABLE_KEY`, `VITE_API_BASE_URL`                 |
+| Root `.env`     | `CLERK_ISSUER`, `CLERK_AUTHORIZED_PARTIES`, `AZURE_KEYVAULT_NAME` |
+| Azure Key Vault | `clerk-secret-key` (never commit)                                 |
 
 Do **not** put `VITE_*` variables only in the root `.env` — Vite reads `frontend/.env` by default.
 

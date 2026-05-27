@@ -2,14 +2,26 @@ import json
 import subprocess
 import os
 
+
 def main():
     print("🚀 Fetching deployment outputs from Azure...")
     try:
         result = subprocess.run(
-            ["az", "deployment", "sub", "show", "--name", "main", "--query", "properties.outputs", "--output", "json"],
+            [
+                "az",
+                "deployment",
+                "sub",
+                "show",
+                "--name",
+                "main",
+                "--query",
+                "properties.outputs",
+                "--output",
+                "json",
+            ],
             capture_output=True,
             text=True,
-            check=True
+            check=True,
         )
         outputs = json.loads(result.stdout)
     except Exception as e:
@@ -29,7 +41,7 @@ def main():
         "AZURE_KEYVAULT_NAME": get_output_val("AZURE_KEYVAULT_NAME"),
         "AZURE_CONTAINER_REGISTRY": get_output_val("AZURE_CONTAINER_REGISTRY"),
         "AZURE_SWA_DEPLOYMENT_TOKEN": get_output_val("AZURE_SWA_DEPLOYMENT_TOKEN"),
-        "AZURE_FUNCTION_APP_NAME": get_output_val("AZURE_FUNCTION_APP_NAME")
+        "AZURE_FUNCTION_APP_NAME": get_output_val("AZURE_FUNCTION_APP_NAME"),
     }
 
     env_vars = {}
@@ -64,8 +76,9 @@ def main():
         f.write("# ──────────────────────────────────────────────\n")
         for k, v in sorted(env_vars.items()):
             f.write(f"{k}={v}\n")
-            
+
     print("✅ Successfully updated .env with Azure deployment outputs!")
+
 
 if __name__ == "__main__":
     main()

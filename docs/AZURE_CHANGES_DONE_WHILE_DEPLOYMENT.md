@@ -157,6 +157,7 @@ This document records the exact changes and adjustments made to the Azure Bicep 
 ---
 
 ## 11. Strict Production Authentication Enforcement
+
 - **Issue**: Although authentication endpoints were present, unauthenticated requests to API endpoints (like `/conversations`) defaulted to the `"admin"` user fallback when no token or header was specified, allowing unauthorized public access to backend resources in production.
 - **Resolution**:
   - **Environment-Aware Auth Guards**: Enhanced `get_current_user_id()` in `backend/app/dependencies.py` to identify whether the container is running in a deployed Azure cloud environment (by checking if `COSMOS_ENDPOINT` points to a non-localhost/non-emulator address and ensuring it is not a `pytest` execution).
@@ -166,6 +167,7 @@ This document records the exact changes and adjustments made to the Azure Bicep 
 ---
 
 ## 12. Automated AI Document Intelligence Provisioning and Secrets Automation
+
 - **Issue**: The RAG Ingestion pipeline lacked an automated provisioning solution for Azure AI Document Intelligence, requiring manual resource creation in the portal. Additionally, the LiteLLM API and Vision API keys were managed via local environment variables, mimicking AWS SSM Parameter storage.
 - **Resolution**:
   - **Bicep Automation**: Created a new Bicep module `document-intelligence.bicep` to automatically provision a Standard (`S0`) Azure AI Document Intelligence resource.
@@ -192,7 +194,7 @@ This document records the exact changes and adjustments made to the Azure Bicep 
 
 - **Issue**: After the Function App was provisioned via Bicep, both the main app endpoint (`func-chatbot-worker-*.azurewebsites.net`) and the SCM/Kudu deploy endpoint (`*.scm.azurewebsites.net`) returned `503 Site Unavailable`. This completely blocked all `func azure functionapp publish` deployments with the error:
   > `Unable to connect to the Azure Function App... Response status code does not indicate success: 503 (Site Unavailable).`
-  All standard troubleshooting (restarts, network checks, storage validation) confirmed the app was running, public network access was enabled, and the Azure Files content share was intact — but the 503 persisted.
+  > All standard troubleshooting (restarts, network checks, storage validation) confirmed the app was running, public network access was enabled, and the Azure Files content share was intact — but the 503 persisted.
 - **Root Cause**: The `functions.bicep` module was missing the **`FUNCTIONS_EXTENSION_VERSION = ~4`** app setting. This setting tells the Azure Functions platform which version of the host runtime to load. Without it, the Linux Consumption plan cannot initialize the Functions v4 host, leaving the entire app (including its SCM site) in a permanently broken 503 state.
 - **Resolution**:
   - **Live fix via CLI**: Applied the missing setting immediately to the running Function App and restarted it:
@@ -215,7 +217,7 @@ This document records the exact changes and adjustments made to the Azure Bicep 
 
 - **Issue**: Running `make deploy-functions` printed a warning:
   > `Local python version '3.14.x' is different from the version expected for your deployed Function App. This may result in 'ModuleNotFound' errors in Azure Functions. Please create a Python Function App for version 3.14 or change the virtual environment on your local machine to match 'Python|3.12'.`
-  The local `.venv` was created with Python 3.13 (the system default), while the Azure Function App is configured with `linuxFxVersion: Python|3.12`. This mismatch risks native C-extension `.so` files being built for the wrong ABI, causing `ModuleNotFoundError` at runtime on Azure.
+  > The local `.venv` was created with Python 3.13 (the system default), while the Azure Function App is configured with `linuxFxVersion: Python|3.12`. This mismatch risks native C-extension `.so` files being built for the wrong ABI, causing `ModuleNotFoundError` at runtime on Azure.
 - **Resolution**: Hardened `deploy-functions.sh` with two additional safeguards:
   1. **Python 3.12 venv enforcement**: The script now detects the Python version of the existing `.venv`. If it does not match `3.12`, it automatically deletes and recreates the venv using the `uv`-managed Python 3.12 interpreter and re-installs all dependencies from `requirements.txt`:
      ```bash
@@ -248,6 +250,7 @@ This document records the exact changes and adjustments made to the Azure Bicep 
   ```
   The `#` character was carried over from the original **AWS DynamoDB sort key convention** (where `PK#SK` composite keys are idiomatic). However, Azure Cosmos DB for NoSQL **explicitly forbids** `#`, `/`, `\`, and `?` in document `id` fields. The Python SDK raises a client-side `ValueError` before even making the HTTP request, crashing the entire ingestion pipeline.
 - **Resolution**: Replaced `#` with `-` in both `ingest_document` and `ingest_binary_document` key generation:
+
   ```python
   # Before (broken)
   keys = [f"{document_id}#chunk-{idx}" for idx in range(len(chunks))]
@@ -255,6 +258,7 @@ This document records the exact changes and adjustments made to the Azure Bicep 
   # After (fixed)
   keys = [f"{document_id}-chunk-{idx}" for idx in range(len(chunks))]
   ```
+
   Fixed in both code paths (text and binary document ingestion) in [rag.py](../backend/app/services/rag.py).
 
 ---

@@ -40,19 +40,19 @@ Phase 10 (Cleanup & Cutover)
 
 ## Phase Summary
 
-| Phase | Title                            | AWS Service Replaced           | Azure Target                                        | Complexity | Document                                                   |
-| :---- | :------------------------------- | :----------------------------- | :-------------------------------------------------- | :--------- | :--------------------------------------------------------- |
-| 0     | Overview & Roadmap               | —                              | —                                                   | —          | _(this file)_                                              |
-| 1     | Project Scaffold & IaC Bootstrap | SAM `template.yaml`            | Bicep + `azd`                                       | Low        | [PHASE_1_SCAFFOLD.md](./PHASE_1_SCAFFOLD.md)               |
-| 2     | Blob Storage                     | S3 (Uploads)                   | Azure Blob Storage                                  | Low        | [PHASE_2_BLOB_STORAGE.md](./PHASE_2_BLOB_STORAGE.md)       |
-| 3     | Cosmos DB                        | DynamoDB + S3 Vectors          | Cosmos DB NoSQL + Vector Search                     | Medium     | [PHASE_3_COSMOS_DB.md](./PHASE_3_COSMOS_DB.md)             |
-| 4     | Authentication                   | Cognito User Pools             | Microsoft Entra External ID                         | Medium     | [PHASE_4_AUTH.md](./PHASE_4_AUTH.md)                       |
+| Phase | Title                            | AWS Service Replaced           | Azure Target                                           | Complexity | Document                                                   |
+| :---- | :------------------------------- | :----------------------------- | :----------------------------------------------------- | :--------- | :--------------------------------------------------------- |
+| 0     | Overview & Roadmap               | —                              | —                                                      | —          | _(this file)_                                              |
+| 1     | Project Scaffold & IaC Bootstrap | SAM `template.yaml`            | Bicep + `azd`                                          | Low        | [PHASE_1_SCAFFOLD.md](./PHASE_1_SCAFFOLD.md)               |
+| 2     | Blob Storage                     | S3 (Uploads)                   | Azure Blob Storage                                     | Low        | [PHASE_2_BLOB_STORAGE.md](./PHASE_2_BLOB_STORAGE.md)       |
+| 3     | Cosmos DB                        | DynamoDB + S3 Vectors          | Cosmos DB NoSQL + Vector Search                        | Medium     | [PHASE_3_COSMOS_DB.md](./PHASE_3_COSMOS_DB.md)             |
+| 4     | Authentication                   | Cognito User Pools             | Microsoft Entra External ID                            | Medium     | [PHASE_4_AUTH.md](./PHASE_4_AUTH.md)                       |
 | 5     | Event-Driven Ingestion           | SQS + Lambda Worker + Textract | Storage Queues + Azure Functions + AI Doc Intelligence | Medium     | [PHASE_5_INGESTION.md](./PHASE_5_INGESTION.md)             |
-| 6     | Secrets Management               | SSM Parameter Store            | Azure Key Vault                                     | Low        | [PHASE_6_SECRETS.md](./PHASE_6_SECRETS.md)                 |
-| 7     | Compute & Deployment             | Lambda + LWA + API Gateway     | Azure Container Apps                                | Low        | [PHASE_7_CONTAINER_APPS.md](./PHASE_7_CONTAINER_APPS.md)   |
-| 8     | Frontend Hosting                 | S3 Static Website              | Azure Static Web Apps                               | Low        | [PHASE_8_STATIC_WEB_APPS.md](./PHASE_8_STATIC_WEB_APPS.md) |
-| 9     | Observability                    | CloudWatch Logs                | Azure Monitor + App Insights                        | Low        | [PHASE_9_OBSERVABILITY.md](./PHASE_9_OBSERVABILITY.md)     |
-| 10    | Cleanup & Cutover                | —                              | —                                                   | Low        | [PHASE_10_CUTOVER.md](./PHASE_10_CUTOVER.md)               |
+| 6     | Secrets Management               | SSM Parameter Store            | Azure Key Vault                                        | Low        | [PHASE_6_SECRETS.md](./PHASE_6_SECRETS.md)                 |
+| 7     | Compute & Deployment             | Lambda + LWA + API Gateway     | Azure Container Apps                                   | Low        | [PHASE_7_CONTAINER_APPS.md](./PHASE_7_CONTAINER_APPS.md)   |
+| 8     | Frontend Hosting                 | S3 Static Website              | Azure Static Web Apps                                  | Low        | [PHASE_8_STATIC_WEB_APPS.md](./PHASE_8_STATIC_WEB_APPS.md) |
+| 9     | Observability                    | CloudWatch Logs                | Azure Monitor + App Insights                           | Low        | [PHASE_9_OBSERVABILITY.md](./PHASE_9_OBSERVABILITY.md)     |
+| 10    | Cleanup & Cutover                | —                              | —                                                      | Low        | [PHASE_10_CUTOVER.md](./PHASE_10_CUTOVER.md)               |
 
 ---
 
