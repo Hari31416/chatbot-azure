@@ -6,11 +6,11 @@
 
 ## Quick Summary
 
-| Category         | Services                                                                                 | Monthly Cost                   |
-| :--------------- | :--------------------------------------------------------------------------------------- | :----------------------------- |
-| 🟢 Always Free   | Static Web Apps, Entra ID, Container Apps, Functions, Cosmos DB, Monitor, Storage Queues | **$0**                         |
-| 🟡 12-Month Free | Blob Storage, Key Vault                                                                  | **$0** → ~$0.09 after expiry   |
-| 🔴 Metered       | Document Intelligence, LLM APIs                                                          | **$0–$10+** depending on usage |
+| Category         | Services                                                                                              | Monthly Cost                   |
+| :--------------- | :---------------------------------------------------------------------------------------------------- | :----------------------------- |
+| 🟢 Always Free   | Static Web Apps, Clerk (under 10k MAU), Container Apps, Functions, Cosmos DB, Monitor, Storage Queues | **$0**                         |
+| 🟡 12-Month Free | Blob Storage, Key Vault                                                                               | **$0** → ~$0.09 after expiry   |
+| 🔴 Metered       | Document Intelligence, LLM APIs                                                                       | **$0–$10+** depending on usage |
 
 **Total if configured correctly: $0/month**
 
@@ -35,13 +35,13 @@ These services have **permanent** free tiers that never expire. As long as you s
 
 ---
 
-### Microsoft Entra External ID
+### Clerk Authentication
 
 | Resource                   | Free Allowance |
 | :------------------------- | :------------- |
-| Monthly Active Users (MAU) | **50,000**     |
+| Monthly Active Users (MAU) | **10,000**     |
 
-**Gotcha:** None for this project. For context, AWS Cognito's free tier caps at 10,000 MAU — Entra gives 5× more.
+**Gotcha:** None for this project. Clerk's free tier supports up to 10,000 Monthly Active Users (MAU) for free, which matches AWS Cognito's limits and is more than sufficient for internal testing and standard development deployments.
 
 ---
 
@@ -353,7 +353,7 @@ Run through this before every `azd provision` or `az deployment` command:
 | Service                | Configuration              | Monthly Cost     |
 | :--------------------- | :------------------------- | :--------------- |
 | Static Web Apps        | Free plan                  | $0               |
-| Entra External ID      | < 50k MAU                  | $0               |
+| Clerk Authentication   | < 10k MAU                  | $0               |
 | Container Apps         | `minReplicas: 0`           | $0               |
 | Azure Functions        | Consumption plan           | $0               |
 | Cosmos DB              | Free tier, 400 RU/s manual | $0               |
@@ -371,7 +371,7 @@ Run through this before every `azd provision` or `az deployment` command:
 | Service                | Configuration                          | Monthly Cost       |
 | :--------------------- | :------------------------------------- | :----------------- |
 | Static Web Apps        | Free plan (sufficient up to 100 GB)    | $0                 |
-| Entra External ID      | < 50k MAU                              | $0                 |
+| Clerk Authentication   | < 10k MAU                              | $0                 |
 | Container Apps         | `minReplicas: 1` for availability      | **$30–50**         |
 | Azure Functions        | Consumption plan                       | $0                 |
 | Cosmos DB              | 400 RU/s manual (may need to increase) | $0–$24             |

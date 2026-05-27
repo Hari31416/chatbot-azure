@@ -8,15 +8,15 @@ This guide details the optimal path for migrating the Serverless Chatbot applica
 
 The serverless, event-driven flow translates natively into Azure's ecosystem.
 
-```
+```txt
 [ STATIC SITE VISITS ]
 1. User Browser ──────(Loads HTML/CSS/JS)──────► Azure Static Web Apps (Free CDN / SSL / Routing)
 
 [ SIGN-UP / LOG-IN ]
-2. User Browser ──────(Register/Authenticate)──► Microsoft Entra External ID (50k MAU Free Tier)
+2. User Browser ──────(Register/Authenticate)──► Clerk Authentication (10k MAU Free Tier)
 
 [ SECURED DATABASE & IMAGE ACTIONS (REST) ]
-3. User Browser ──────(Requests /conversations)► Azure Container Apps Ingress (Validates Entra JWT)
+3. User Browser ──────(Requests /conversations)► Azure Container Apps Ingress (Validates Clerk JWT)
                                                          │
                                                          ▼
                                                    Azure Container Apps (FastAPI Backend container)
@@ -47,7 +47,7 @@ The serverless, event-driven flow translates natively into Azure's ecosystem.
                                                    (Event Grid Notification)
                                                          │
                                                          ▼
-                                                   Azure Service Bus Queue (Buffers Job)
+                                                   Azure Storage Queue (Buffers Job)
                                                          │
                                                    (Triggers Function)
                                                          │
@@ -69,13 +69,13 @@ The serverless, event-driven flow translates natively into Azure's ecosystem.
 | :----------------------------- | :--------------------------------- | :------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **AWS Lambda + LWA (FastAPI)** | **Azure Container Apps (ACA)**     | **Low**              | Packaged as a standard container. Deploy directly to ACA. Remove `AWS Lambda Web Adapter` layer; ACA supports native ingress routing.                                   |
 | **AWS Lambda Function URL**    | **Azure Container Apps Ingress**   | **Low**              | Expose Container App endpoints with Ingress. ACA natively supports HTTP Chunked Transfer Encoding (Response Streaming).                                                 |
-| **Amazon Cognito User Pools**  | **Microsoft Entra External ID**    | **Medium**           | Swap Amplify JS SDK on frontend for **MSAL.js**. Backend uses standard Entra JWKS endpoints to verify JWT signatures.                                                   |
+| **Amazon Cognito User Pools**  | **Clerk Authentication**           | **Low**              | Swap Amplify JS SDK on frontend for Clerk React SDK. Backend validates session JWTs via Clerk's JWKS endpoint.                                                          |
 | **Amazon DynamoDB**            | **Azure Cosmos DB for NoSQL**      | **Medium**           | Recreate Single-Table design inside a Cosmos container. Swap key schemas using partitions and indexes. Cosmos DB supports `TimeToLive` natively.                        |
 | **Amazon S3 (Uploads)**        | **Azure Blob Storage**             | **Low**              | Swap S3 client operations to Azure Blob Storage client. Map S3 Presigned URLs to Azure Blob Shared Access Signatures (SAS) URLs.                                        |
 | **Amazon S3 (Frontend Site)**  | **Azure Static Web Apps (ASWA)**   | **Low**              | Ideal target. ASWA hosts standard React/Vite outputs, handles CDN distribution, custom domains, and sets up SPA routing fallback configurations.                        |
 | **Amazon S3 Vectors**          | **Cosmos DB Vector Search**        | **Medium**           | Instead of an external S3 Vector client, define a Vector Index directly inside the Cosmos DB Container. Enables metadata-filtered hybrid vector queries in one DB call. |
-| **Amazon SQS + DLQ**           | **Azure Service Bus (Queue)**      | **Low**              | Recreate FIFO or Standard queues using Service Bus Queues. Azure Service Bus has native dead-lettering support.                                                         |
-| **AWS Lambda Worker**          | **Azure Functions**                | **Medium**           | Port background worker to an Azure Function using a Service Bus Queue Trigger.                                                                                          |
+| **Amazon SQS + DLQ**           | **Azure Storage Queue**            | **Low**              | Recreate queues using Azure Storage Queues (configured with Event Grid triggers).                                                                                       |
+| **AWS Lambda Worker**          | **Azure Functions**                | **Medium**           | Port background worker to an Azure Function using a Storage Queue Trigger.                                                                                              |
 | **AWS Textract**               | **Azure AI Document Intelligence** | **Low**              | Call the `prebuilt-layout` endpoint of Document Intelligence. Retain Markdown-based parsing outputs for RAG chunks.                                                     |
 | **SSM Parameter Store**        | **Azure Key Vault**                | **Low**              | Securely store third-party keys as Key Vault secrets. Bind ACA/Functions to retrieve them via Managed Identity.                                                         |
 | **CloudWatch Logs**            | **Azure Monitor Log Analytics**    | **Low**              | stdout / logging module output streams automatically capture inside Log Analytics / Application Insights.                                                               |
@@ -93,8 +93,8 @@ These services cost **$0.00** forever under moderate development use, regardless
 - **Azure Static Web Apps (ASWA) [Free Tier Plan]:**
   - _Grant:_ Unlimited hosting, free SSL certificates, custom domains, integrated global CDN, and 100 GB of outbound bandwidth per month.
   - _Role:_ Chatbot React/Vite Frontend interface.
-- **Microsoft Entra External ID:**
-  - _Grant:_ **50,000 Monthly Active Users (MAUs)** completely free! (Cognito's equivalent free tier caps at 10,000).
+- **Clerk Authentication:**
+  - _Grant:_ **10,000 Monthly Active Users (MAUs)** completely free under Clerk's Developer/Free plan (matches Cognito's limits).
   - _Role:_ User authentication, sign-ups, and logins.
 - **Azure Container Apps (ACA):**
   - _Grant:_ **180,000 vCPU-seconds, 360,000 GiB-seconds, and 2 million requests** free _every single month_.
@@ -176,7 +176,7 @@ In your AWS stack, **AWS SAM (Serverless Application Model)** serves three roles
 
 In Azure, this orchestration maps to a modern, developer-friendly ecosystem:
 
-```
+```txt
 ┌─────────────────────────────────┬──────────────────────────────────┐
 │ AWS SAM Component               │ Azure Native Equivalent          │
 ├─────────────────────────────────┼──────────────────────────────────┤
@@ -275,7 +275,7 @@ Instead of simulating raw Lambda functions inside local Docker containers with S
    - The **SWA CLI** (`npm install -g @azure/static-web-apps-cli`) is a powerful emulator that runs a local server simulating the entire front-to-back architecture:
      - Serves the React frontend.
      - Proxies API calls directly to your local FastAPI backend.
-     - Emulates **Entra ID authentication / login** so you can test secure headers and JWT extraction on localhost without configuring live cloud directories!
+     - Enables local request testing without requiring Entra configurations. Authentication is verified locally using standard Clerk credentials or mock headers.
    - **Usage:** `swa start http://localhost:5173 --api-location http://localhost:8080`
 
 ---
@@ -291,5 +291,5 @@ If you want to run this entire migrated chatbot on Azure for **$0.00/month**, bu
 5. **Decoupled Queue:** Use **Azure Storage Queues** (12-month free standard storage transactions) instead of Azure Service Bus Standard tier.
 6. **Ingestion Compute:** Deploy the worker as an **Azure Function** under the Consumption Plan.
 7. **Secrets:** Bind parameters to **Azure Key Vault** utilizing system-assigned Managed Identity for passwordless connection.
-8. **Auth Directory:** Create a **Microsoft Entra External ID** tenant to manage user authentication.
+8. **Auth Directory:** Create a **Clerk** application to manage user authentication.
 9. **Infrastructure Orchestration:** Use **Azure Bicep** and **Azure Developer CLI (`azd`)** for standard deployment automations.

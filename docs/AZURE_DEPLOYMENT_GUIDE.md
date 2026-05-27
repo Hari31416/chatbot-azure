@@ -1,6 +1,6 @@
 # Azure Deployment & Authentication Setup Guide
 
-This guide provides a comprehensive, step-by-step walk-through to provision the Azure infrastructure, configure Microsoft Entra ID (Active Directory) authentication, create test users, store gateway API secrets, and deploy the decoupled FastAPI backend and React frontend.
+This guide provides a comprehensive, step-by-step walk-through to provision the Azure infrastructure, configure Clerk authentication, create test users, store gateway API secrets, and deploy the decoupled FastAPI backend and React frontend.
 
 ---
 
@@ -157,17 +157,15 @@ Ensure users can authenticate. Under **API permissions**:
 
 ---
 
-## 👥 Step 4: Create Authorized Test Users
+## 👥 Step 4: Create Authorized Test Users in Clerk
 
-Since this is a Single Tenant enterprise directory app, you must register users inside your directory tenant to allow them to log in.
+Authentication is managed via Clerk. You can add users directly from your Clerk Dashboard:
 
-1. In the **Microsoft Entra ID** portal, navigate to **Users** $\rightarrow$ **All users** $\rightarrow$ **New user** $\rightarrow$ **Create new user**.
-2. Fill in the user profile parameters:
-   - **User principal name (username)**: `testuser@yourdomain.onmicrosoft.com`
-   - **Display name**: `Test User`
-   - **Password**: Select "Auto-generate password" or write a secure temporary one.
-3. Click **Create**.
-4. _(Optional)_ Login once with this user on [myapps.microsoft.com](https://myapps.microsoft.com) to accept the directory's default terms and reset the temporary password if prompted.
+1. Sign in to your [Clerk Dashboard](https://dashboard.clerk.com).
+2. Navigate to **User Management** $\rightarrow$ **Users** in the left-hand menu.
+3. Click **Add user** (or **Invite user**) to configure credentials for testing.
+4. Fill in the email, username, and password, then click **Create**.
+5. Alternatively, in development mode, you can sign up directly through the React frontend running locally at `http://localhost:3000` to create your test account.
 
 ---
 
@@ -231,7 +229,7 @@ make deploy-backend
 
 ## 💻 Step 7: Deploy the Frontend Client (Static Web Apps)
 
-Configure your React environment variables to link with Microsoft Entra ID and the deployed backend API:
+Configure your React environment variables to link with Clerk and the deployed backend API:
 
 1. Navigate to the frontend directory:
    ```bash
@@ -241,11 +239,10 @@ Configure your React environment variables to link with Microsoft Entra ID and t
    ```bash
    cp .env.example .env
    ```
-3. Populate the Entra ID variables you extracted in Step 3:
+3. Populate the Clerk and API variables (see `docs/CLERK_AUTH_SETUP.md`):
    ```env
    VITE_API_BASE_URL=https://chatbot-backend.dev-api.azurecontainerapps.io
-   VITE_AZURE_CLIENT_ID=xxxxxx-xxxx-xxxx-xxxx-xxxxxxxxx
-   VITE_ENTRA_AUTHORITY=https://login.microsoftonline.com/your-tenant-id
+   VITE_CLERK_PUBLISHABLE_KEY=pk_test_xxxxxxxxxxxxxxxxxxxxxxxxxx
    ```
 4. Build the application and upload it to Azure Static Web Apps:
    ```bash
