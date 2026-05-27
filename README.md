@@ -17,6 +17,10 @@ The entire platform is built with a serverless-first philosophy, ensuring high s
 - **Azure Storage Queues Ingestion Queue** handles background document processing. When a document is uploaded, it lands in the staging area of an Azure Blob Storage container. This triggers a storage queue message, decoupling the ingestion workload from the API request lifecycle.
 - **Asynchronous Ingestion Worker** is an isolated **Azure Function App** triggered by the Ingestion Queue. It downloads files, processes multi-page binaries using **Azure AI Document Intelligence**, splits and chunks text, computes embeddings via LiteLLM, indexes them in a native **Cosmos DB** container, and updates the document status.
 
+### High-Level System Architecture
+
+![High-Level RAG Azure Architecture](./images/rag_azure_architecture.png)
+
 ### Logical Request and Data Flow (Interactive Visualization)
 
 ```mermaid
